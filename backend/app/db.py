@@ -77,3 +77,12 @@ def _ensure_columns() -> None:
             ))
         if "embedding_api_key_encrypted" not in cols:
             conn.execute(text(f"ALTER TABLE tenants ADD COLUMN embedding_api_key_encrypted {bin_type}"))
+        if "retrieval_config" not in cols:
+            conn.execute(text(
+                f"ALTER TABLE tenants ADD COLUMN retrieval_config {json_type} "
+                f"NOT NULL DEFAULT '{{}}'::{json_type}"
+                if is_pg else
+                f"ALTER TABLE tenants ADD COLUMN retrieval_config {json_type} NOT NULL DEFAULT '{{}}'"
+            ))
+        if "rerank_api_key_encrypted" not in cols:
+            conn.execute(text(f"ALTER TABLE tenants ADD COLUMN rerank_api_key_encrypted {bin_type}"))

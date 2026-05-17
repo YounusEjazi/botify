@@ -153,6 +153,27 @@ class EmbeddingConfigUpdate(BaseModel):
     api_key: str | None = None
 
 
+class RetrievalConfigOut(BaseModel):
+    mode: str = "hybrid"  # "hybrid" | "vector"
+    candidate_k: int = 30
+    rerank_enabled: bool = False
+    rerank_provider: str = ""
+    rerank_model: str = ""
+    rerank_top_k: int = 5
+    has_rerank_api_key: bool = False
+
+
+class RetrievalConfigUpdate(BaseModel):
+    mode: str = Field(default="hybrid", pattern="^(hybrid|vector)$")
+    candidate_k: int = Field(default=30, ge=1, le=500)
+    rerank_enabled: bool = False
+    rerank_provider: str = ""
+    rerank_model: str = ""
+    rerank_top_k: int = Field(default=5, ge=1, le=50)
+    # If None or empty, the existing key is preserved. Send a new value to rotate.
+    rerank_api_key: str | None = None
+
+
 class IntegrationCreate(BaseModel):
     kind: str
     name: str

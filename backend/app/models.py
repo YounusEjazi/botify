@@ -79,6 +79,20 @@ class Tenant(Base):
     embedding_config: Mapped[dict[str, Any]] = mapped_column(_JSON, default=dict, nullable=False)
     embedding_api_key_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
+    # Retrieval (hybrid search + reranker) config. Defaults: hybrid mode, no rerank.
+    # Shape: {
+    #   "mode": "hybrid" | "vector",
+    #   "candidate_k": 30,            # how many chunks to pull before rerank
+    #   "rerank": {
+    #     "enabled": false,
+    #     "provider": "cohere",       # UI label only
+    #     "model": "rerank-english-v3.0",
+    #     "top_k": 5
+    #   }
+    # }
+    retrieval_config: Mapped[dict[str, Any]] = mapped_column(_JSON, default=dict, nullable=False)
+    rerank_api_key_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
     # System prompts per language: {"en": "...", "de": "..."}
     system_prompts: Mapped[dict[str, str]] = mapped_column(_JSON, default=dict, nullable=False)
 

@@ -28,6 +28,8 @@ from ..schemas import (
     LLMConfigOut,
     LLMConfigUpdate,
     LLMTestResult,
+    RetrievalConfigOut,
+    RetrievalConfigUpdate,
     SalesforceTestRequest,
     TenantCreate,
     TenantOut,
@@ -248,6 +250,59 @@ async def test_embedding_config(
         return LLMTestResult(ok=True, model=cfg.get("model", ""), detail="OK")
     except Exception as exc:
         return LLMTestResult(ok=False, model=cfg.get("model", ""), detail=str(exc)[:500])
+
+
+# ─── Retrieval (hybrid search + reranker) ──────────────────────────────────
+
+
+def _retrieval_out(tenant: Tenant) -> RetrievalConfigOut:
+    cfg = tenant.retrieval_config or {}
+    rerank = cfg.get("rerank") or {}
+    return RetrievalConfigOut(
+        mode=cfg.get("mode", "hybrid"),
+        candidate_k=int(cfg.get("candidate_k", 30)),
+        rerank_enabled=bool(rerank.get("enabled", False)),
+        rerank_provider=rerank.get("provider", ""),
+        rerank_model=rerank.get("model", ""),
+        rerank_top_k=int(rerank.get("top_k", 5)),
+        has_rerank_api_key=bool(tenant.rerank_api_key_encrypted),
+    )
+
+
+@router.get("/tenants/{slug}/retrieval", response_model=RetrievalConfigOut)
+def get_retrieval_config(slug: str, db: Annotated[Session, Depends(get_db)]) -> RetrievalConfigOut:
+    return _retrieval_out(_get_tenant_or_404(slug, db))
+
+
+@router.put("/tenants/{slug}/retrieval", response_model=RetrievalConfigOut)
+def update_retrieval_config(
+    slug: str,
+    payload: RetrievalConfigUpdate,
+    db: Annotated[Session, Depends(get_db)],
+) -> RetrievalConfigOut:
+    tenant = _get_tenant_or_404(slug, db)
+    tenant.retrieval_config = {
+        "mode": payload.mode,
+        "candidate_k": payload.candidate_k,
+        "rerank": {
+            "enabled": payload.rerank_enabled,
+            "provider": payload.rerank_provider,
+            "model": payload.rerank_model,
+            "top_k": payload.rerank_top_k,
+        },
+    }
+    if payload.rerank_api_key:
+        tenant.rerank_api_key_encrypted = encrypt_dict({"api_key": payload.rerank_api_key})
+    db.commit()
+    db.refresh(tenant)
+    return _retrieval_out(tenant)
+
+
+@router.delete("/tenants/{slug}/retrieval/key", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rerank_api_key(slug: str, db: Annotated[Session, Depends(get_db)]) -> None:
+    tenant = _get_tenant_or_404(slug, db)
+    tenant.rerank_api_key_encrypted = None
+    db.commit()
 
 
 # ─── Integrations ──────────────────────────────────────────────────────────

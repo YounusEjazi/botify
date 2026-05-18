@@ -2,7 +2,8 @@
 
 A tenant's llm_config decides which model to call. Models are referenced by
 LiteLLM model strings (e.g. "gpt-4o-mini", "anthropic/claude-sonnet-4-5",
-"azure/my-deployment-name"). See https://docs.litellm.ai/docs/providers.
+"azure/my-deployment-name", "azure_ai/mistral-large-latest"). See
+https://docs.litellm.ai/docs/providers.
 
 API keys come from environment — LiteLLM picks them up automatically. If you
 want per-tenant API keys later, pass them through to `completion()` as
@@ -26,7 +27,7 @@ litellm.drop_params = False
 
 # Per-LiteLLM convention. Used to validate "provider/" model strings in the dashboard.
 KNOWN_PROVIDERS = {
-    "openai", "anthropic", "deepseek", "azure",
+    "openai", "anthropic", "deepseek", "azure", "azure_ai",
     "gemini", "groq", "mistral", "ollama", "together_ai",
 }
 

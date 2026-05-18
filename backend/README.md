@@ -50,7 +50,7 @@ Pattern matches Onyx's `VectorStore` abstraction with multiple backends.
 
 ## Swapping the LLM
 
-LiteLLM routes by model string. Each tenant's `llm_config.model` can be any LiteLLM-supported model (`gpt-4o-mini`, `anthropic/claude-sonnet-4-5`, `azure/<deployment>`, `gemini/gemini-2.5-pro`, etc.). API keys come from env vars per LiteLLM's conventions.
+LiteLLM routes by model string. Each tenant's `llm_config.model` can be any LiteLLM-supported model (`gpt-4o-mini`, `anthropic/claude-sonnet-4-5`, `azure/<deployment>`, `azure_ai/mistral-large-latest`, `gemini/gemini-2.5-pro`, etc.). API keys can come from tenant config or env vars per LiteLLM's conventions.
 
 ## Production checklist
 

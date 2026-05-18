@@ -8,7 +8,10 @@ type Provider = {
     id: string
     label: string
     models: string[]
-    apiBase?: string
+    modelHint?: string
+    apiBaseRequired?: boolean
+    apiBaseHint?: string
+    apiBasePlaceholder?: string
     apiKeyHint: string
     docsUrl: string
 }
@@ -52,6 +55,22 @@ const PROVIDERS: Provider[] = [
         models: ["groq/llama-3.3-70b-versatile", "groq/llama-3.1-8b-instant"],
         apiKeyHint: "From console.groq.com",
         docsUrl: "https://console.groq.com/keys",
+    },
+    {
+        id: "azure_ai",
+        label: "Azure AI Foundry",
+        models: [
+            "azure_ai/command-r-plus",
+            "azure_ai/mistral-large-latest",
+            "azure_ai/ai21-jamba-instruct",
+            "azure_ai/claude-opus-4-1",
+        ],
+        modelHint: "LiteLLM Azure AI model string. Keep the azure_ai/ prefix.",
+        apiBaseRequired: true,
+        apiBaseHint: "Required. Use the Azure AI Foundry inference endpoint. For Azure Claude, use the /anthropic endpoint.",
+        apiBasePlaceholder: "https://your-model.region.inference.ai.azure.com/",
+        apiKeyHint: "Azure AI Foundry endpoint key",
+        docsUrl: "https://docs.litellm.ai/docs/providers/azure_ai",
     },
     {
         id: "custom",
@@ -170,7 +189,7 @@ export function LLMConfigEditor({
                 </div>
             </Field>
 
-            <Field label="Model" hint="LiteLLM model string. For custom providers, prefix with the provider name (e.g. openai/my-model).">
+            <Field label="Model" hint={provider.modelHint || "LiteLLM model string. For custom providers, prefix with the provider name (e.g. openai/my-model)."}>
                 {provider.models.length ? (
                     <input
                         className="input mono"
@@ -211,13 +230,14 @@ export function LLMConfigEditor({
                 )}
             </Field>
 
-            <Field label="API base URL (optional)" hint="Required for Azure OpenAI or self-hosted OpenAI-compatible endpoints. Leave blank otherwise.">
+            <Field label={`API base URL${provider.apiBaseRequired ? "" : " (optional)"}`} hint={provider.apiBaseHint || "Required for Azure OpenAI or self-hosted OpenAI-compatible endpoints. Leave blank otherwise."}>
                 <input
                     className="input mono"
                     type="url"
-                    placeholder="https://api.openai.com/v1"
+                    placeholder={provider.apiBasePlaceholder || "https://api.openai.com/v1"}
                     value={apiBase}
                     onChange={(e) => setApiBase(e.target.value)}
+                    required={provider.apiBaseRequired}
                 />
             </Field>
 

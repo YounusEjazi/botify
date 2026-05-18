@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Integration } from "@/lib/api"
+import { api, Integration } from "@/lib/api"
 import { Field, Notice, Empty } from "@/components/ui"
 import { SalesforceForm } from "./SalesforceForm"
 
@@ -9,10 +9,22 @@ const KINDS = [
     {
         kind: "salesforce",
         label: "Salesforce",
-        // Rendered by SalesforceForm — config/secret examples below are unused.
         configHint: "",
         configExample: {},
         secretExample: {},
+    },
+    {
+        kind: "zendesk",
+        label: "Zendesk",
+        configHint: "subdomain, priority, tags, group_id (optional), ticket_form_id (optional).",
+        configExample: {
+            subdomain: "mycompany",
+            priority: "normal",
+            tags: ["chatbot"],
+            group_id: null,
+            ticket_form_id: null,
+        },
+        secretExample: { email: "admin@mycompany.com", api_token: "…" },
     },
     {
         kind: "webhook",
@@ -24,7 +36,7 @@ const KINDS = [
             tool_description: "File a support ticket in our system.",
             fields: [
                 { name: "subject", type: "string", description: "Short summary", required: true },
-                { name: "email", type: "string", description: "User email", required: false },
+                { name: "email",   type: "string", description: "User email",    required: false },
             ],
         },
         secretExample: { hmac_secret: "…", auth_header: "Bearer …" },
@@ -42,6 +54,17 @@ const KINDS = [
             subject_prefix: "[Chatbot] ",
         },
         secretExample: { smtp_user: "…", smtp_password: "…" },
+    },
+    {
+        kind: "mcp",
+        label: "MCP server",
+        configHint: "server_url (required), auth_header (optional, default: Authorization).",
+        configExample: {
+            server_url: "https://your-mcp-server.example.com/mcp",
+            server_name: "My MCP Server",
+            auth_header: "Authorization",
+        },
+        secretExample: { auth_token: "Bearer sk-…" },
     },
 ]
 
@@ -108,6 +131,12 @@ export function IntegrationsManager({ slug, initial }: { slug: string; initial: 
                         onSuccess={async () => { setAdding(null); await refresh() }}
                         onCancel={() => setAdding(null)}
                     />
+                ) : adding === "mcp" ? (
+                    <MCPForm
+                        slug={slug}
+                        onSuccess={async () => { setAdding(null); await refresh() }}
+                        onCancel={() => setAdding(null)}
+                    />
                 ) : adding && (
                     <AddIntegrationForm
                         slug={slug}
@@ -169,6 +198,88 @@ function AddIntegrationForm({
             <div className="row" style={{ justifyContent: "flex-end" }}>
                 <button className="btn" onClick={onCancel}>Cancel</button>
                 <button className="btn primary" onClick={save} disabled={busy}>
+                    {busy ? "Saving…" : "Connect"}
+                </button>
+            </div>
+        </div>
+    )
+}
+
+function MCPForm({ slug, onSuccess, onCancel }: { slug: string; onSuccess: () => void; onCancel: () => void }) {
+    const [name, setName] = useState("MCP Server")
+    const [serverUrl, setServerUrl] = useState("")
+    const [authHeader, setAuthHeader] = useState("Authorization")
+    const [authToken, setAuthToken] = useState("")
+    const [busy, setBusy] = useState(false)
+    const [testing, setTesting] = useState(false)
+    const [testResult, setTestResult] = useState<{ ok: boolean; detail: string; tools: string[] } | null>(null)
+    const [error, setError] = useState<string | null>(null)
+
+    async function test() {
+        setTesting(true); setTestResult(null); setError(null)
+        try {
+            const result = await api.testMCP({ server_url: serverUrl, auth_token: authToken, auth_header: authHeader })
+            setTestResult(result)
+        } catch (e: any) {
+            setError(e.message || "Test failed")
+        } finally {
+            setTesting(false)
+        }
+    }
+
+    async function save() {
+        setBusy(true); setError(null)
+        try {
+            const resp = await fetch(`/api/proxy/tenants/${slug}/integrations`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    kind: "mcp",
+                    name,
+                    config: { server_url: serverUrl, server_name: name, auth_header: authHeader },
+                    secret: { auth_token: authToken },
+                    enabled: true,
+                }),
+            })
+            if (!resp.ok) throw new Error((await resp.json()).detail || "Failed")
+            onSuccess()
+        } catch (e: any) {
+            setError(e.message || "Failed to save")
+        } finally {
+            setBusy(false)
+        }
+    }
+
+    return (
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--rule-soft)" }}>
+            {error && <Notice kind="error">{error}</Notice>}
+            {testResult && (
+                <Notice kind={testResult.ok ? "success" : "error"}>
+                    {testResult.ok
+                        ? `Connected — ${testResult.tools.length} tool${testResult.tools.length === 1 ? "" : "s"} found: ${testResult.tools.join(", ") || "none"}`
+                        : testResult.detail}
+                </Notice>
+            )}
+
+            <Field label="Name" hint="Internal label for this MCP server.">
+                <input className="input" value={name} onChange={e => setName(e.target.value)} />
+            </Field>
+            <Field label="Server URL" hint="Full URL of the MCP endpoint, e.g. https://my-server.com/mcp">
+                <input className="input" value={serverUrl} onChange={e => setServerUrl(e.target.value)} placeholder="https://…/mcp" />
+            </Field>
+            <Field label="Auth header" hint="HTTP header used for authentication (leave as Authorization for Bearer tokens).">
+                <input className="input" value={authHeader} onChange={e => setAuthHeader(e.target.value)} />
+            </Field>
+            <Field label="Auth token" hint="Token value sent in the auth header. Encrypted before storage.">
+                <input className="input" type="password" value={authToken} onChange={e => setAuthToken(e.target.value)} placeholder="Bearer sk-…" />
+            </Field>
+
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+                <button className="btn" onClick={onCancel}>Cancel</button>
+                <button className="btn" onClick={test} disabled={testing || !serverUrl}>
+                    {testing ? "Testing…" : "Test connection"}
+                </button>
+                <button className="btn primary" onClick={save} disabled={busy || !serverUrl}>
                     {busy ? "Saving…" : "Connect"}
                 </button>
             </div>

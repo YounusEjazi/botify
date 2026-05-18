@@ -1,7 +1,7 @@
 "use server"
-import { signIn } from "@/auth"
-import { AuthError } from "next-auth"
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { createSessionCookie } from "@/lib/session"
 
 const BACKEND = process.env.BACKEND_URL ?? "http://backend:8000"
 
@@ -9,17 +9,29 @@ export async function loginAction(
     _prev: string | null,
     formData: FormData,
 ): Promise<string | null> {
-    try {
-        await signIn("credentials", {
-            email: formData.get("email") as string,
-            password: formData.get("password") as string,
-            redirectTo: "/tenants",
-        })
-    } catch (e) {
-        if (e instanceof AuthError) return "Invalid email or password."
-        throw e // re-throw so Next.js can handle the NEXT_REDIRECT
-    }
-    return null
+    const email = formData.get("email") as string
+    const password = formData.get("password") as string
+
+    const res = await fetch(`${BACKEND}/api/users/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+    })
+
+    if (!res.ok) return "Invalid email or password."
+
+    const user = await res.json()
+    const cookieStore = await cookies()
+    cookieStore.set({
+        name: "botify_session",
+        value: await buildSessionValue(user.id, email),
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7,
+    })
+
+    redirect("/tenants")
 }
 
 export async function registerAction(
@@ -34,16 +46,47 @@ export async function registerAction(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
     })
+
     if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         return data.detail ?? "Registration failed."
     }
 
-    try {
-        await signIn("credentials", { email, password, redirectTo: "/tenants" })
-    } catch (e) {
-        if (e instanceof AuthError) return "Account created — please sign in."
-        throw e
-    }
-    return null
+    const user = await res.json()
+    const cookieStore = await cookies()
+    cookieStore.set({
+        name: "botify_session",
+        value: await buildSessionValue(user.id, email),
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7,
+    })
+
+    redirect("/tenants")
+}
+
+export async function logoutAction() {
+    const cookieStore = await cookies()
+    cookieStore.delete("botify_session")
+    redirect("/login")
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+async function buildSessionValue(userId: string, email: string): Promise<string> {
+    const SECRET = process.env.AUTH_SECRET ?? "change-me-to-a-random-32-char-secret"
+    const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7
+    const payload = Buffer.from(`${userId}|${email}|${exp}`).toString("base64url")
+    const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(SECRET),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+    )
+    const sig = Buffer.from(
+        await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))
+    ).toString("base64url")
+    return `${payload}.${sig}`
 }

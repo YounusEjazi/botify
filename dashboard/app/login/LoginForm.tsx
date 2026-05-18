@@ -34,18 +34,19 @@ export default function LoginForm() {
                     <button
                         key={t}
                         type="button"
-                        className="btn"
                         onClick={() => setTab(t)}
                         style={{
                             fontWeight: tab === t ? 700 : 400,
                             color: tab === t ? "var(--accent)" : "var(--ink-mute)",
+                            borderTop: "none",
+                            borderLeft: "none",
+                            borderRight: "none",
                             borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
                             borderRadius: 0,
                             background: "none",
-                            border: "none",
-                            borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
                             padding: "0 0 0.25rem",
                             cursor: "pointer",
+                            font: "inherit",
                         }}
                     >
                         {t === "signin" ? "Sign in" : "Create account"}

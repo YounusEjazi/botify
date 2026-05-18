@@ -14,8 +14,10 @@ from ..crypto import decrypt_dict
 from ..models import Integration, Tenant
 from .base import Action
 from .email import EmailAction
+from .mcp_client import MCPClient
 from .salesforce import SalesforceAction
 from .webhook import WebhookAction
+from .zendesk import ZendeskAction
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,8 @@ REGISTRY: dict[str, type[Action]] = {
     SalesforceAction.kind: SalesforceAction,
     WebhookAction.kind: WebhookAction,
     EmailAction.kind: EmailAction,
+    ZendeskAction.kind: ZendeskAction,
+    MCPClient.kind: MCPClient,
 }
 
 

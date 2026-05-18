@@ -5,7 +5,7 @@ import logging
 import secrets
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,10 +14,13 @@ from ..auth import require_admin
 from ..chat import llm as chat_llm
 from ..crypto import encrypt_dict
 from ..db import get_db
-from ..models import Conversation, Document, Integration, Tenant
+from ..models import Conversation, ConnectorSource, Document, Integration, Tenant
 from ..rag.indexer import fetch_url, index_document
 from ..rag.store import get_vector_store
 from ..schemas import (
+    ConnectorCreate,
+    ConnectorOut,
+    ConnectorUpdate,
     DocumentFromUrl,
     DocumentOut,
     EmbeddingConfigOut,
@@ -28,6 +31,8 @@ from ..schemas import (
     LLMConfigOut,
     LLMConfigUpdate,
     LLMTestResult,
+    MCPTestRequest,
+    MCPTestResult,
     RetrievalConfigOut,
     RetrievalConfigUpdate,
     SalesforceTestRequest,
@@ -422,6 +427,21 @@ async def test_salesforce(payload: SalesforceTestRequest) -> IntegrationTestResu
     return IntegrationTestResult(ok=ok, detail=detail)
 
 
+@router.post("/mcp/test", response_model=MCPTestResult)
+async def test_mcp_connection(payload: MCPTestRequest) -> MCPTestResult:
+    """Probe an MCP server: run the initialize+tools/list handshake and return discovered tool names."""
+    from ..actions.mcp_client import fetch_mcp_tools
+    try:
+        tools = await fetch_mcp_tools(
+            public_config={"server_url": payload.server_url, "auth_header": payload.auth_header},
+            secret={"auth_token": payload.auth_token},
+        )
+        tool_names = [t["function"]["name"] for t in tools]
+        return MCPTestResult(ok=True, detail=f"Found {len(tools)} tools", tools=tool_names)
+    except Exception as exc:
+        return MCPTestResult(ok=False, detail=str(exc))
+
+
 # ─── Knowledge base ────────────────────────────────────────────────────────
 
 
@@ -575,6 +595,7 @@ def get_conversation(conversation_id: str, db: Annotated[Session, Depends(get_db
     }
 
 
+
 # ─── Helpers ───────────────────────────────────────────────────────────────
 
 
@@ -583,3 +604,120 @@ def _get_tenant_or_404(slug: str, db: Session) -> Tenant:
     if not tenant:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     return tenant
+
+
+# ─── Connectors (Notion, Google Drive) ────────────────────────────────────
+
+
+def _connector_out(c: ConnectorSource) -> ConnectorOut:
+    return ConnectorOut(
+        id=c.id,
+        kind=c.kind,
+        name=c.name,
+        enabled=c.enabled,
+        status=c.status,
+        last_synced_at=c.last_synced_at,
+        error_message=c.error_message,
+        config=c.config,
+        has_secret=bool(c.encrypted_secret),
+    )
+
+
+@router.get("/tenants/{slug}/connectors", response_model=list[ConnectorOut])
+def list_connectors(slug: str, db: Annotated[Session, Depends(get_db)]):
+    tenant = _get_tenant_or_404(slug, db)
+    return [_connector_out(c) for c in tenant.connector_sources]
+
+
+@router.post(
+    "/tenants/{slug}/connectors",
+    response_model=ConnectorOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_connector(
+    slug: str,
+    payload: ConnectorCreate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    from ..connectors.registry import CONNECTOR_REGISTRY
+
+    if payload.kind not in CONNECTOR_REGISTRY:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown connector kind. Available: {list(CONNECTOR_REGISTRY)}",
+        )
+
+    tenant = _get_tenant_or_404(slug, db)
+    connector = ConnectorSource(
+        tenant_id=tenant.id,
+        kind=payload.kind,
+        name=payload.name,
+        config=payload.config,
+        enabled=payload.enabled,
+        encrypted_secret=encrypt_dict(payload.secret) if payload.secret else None,
+    )
+    db.add(connector)
+    db.commit()
+    db.refresh(connector)
+    return _connector_out(connector)
+
+
+@router.patch("/connectors/{connector_id}", response_model=ConnectorOut)
+def update_connector(
+    connector_id: str,
+    payload: ConnectorUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    connector = db.get(ConnectorSource, connector_id)
+    if not connector:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if payload.name is not None:
+        connector.name = payload.name
+    if payload.config is not None:
+        connector.config = payload.config
+    if payload.enabled is not None:
+        connector.enabled = payload.enabled
+    if payload.secret is not None:
+        connector.encrypted_secret = (
+            encrypt_dict(payload.secret) if payload.secret else connector.encrypted_secret
+        )
+    db.commit()
+    db.refresh(connector)
+    return _connector_out(connector)
+
+
+@router.delete("/connectors/{connector_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_connector(connector_id: str, db: Annotated[Session, Depends(get_db)]) -> None:
+    connector = db.get(ConnectorSource, connector_id)
+    if not connector:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    db.delete(connector)
+    db.commit()
+
+
+@router.post("/connectors/{connector_id}/sync", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_connector_sync(
+    connector_id: str,
+    background_tasks: BackgroundTasks,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Trigger a manual sync for a connector. Runs in the background."""
+    connector = db.get(ConnectorSource, connector_id)
+    if not connector:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+    from ..connectors.sync import sync_connector
+    from ..db import SessionLocal
+
+    async def _run_sync() -> None:
+        bg_db = SessionLocal()
+        try:
+            bg_connector = bg_db.get(ConnectorSource, connector_id)
+            bg_tenant = bg_db.get(Tenant, connector.tenant_id)
+            if bg_connector and bg_tenant:
+                await sync_connector(connector=bg_connector, tenant=bg_tenant, db=bg_db)
+        finally:
+            bg_db.close()
+
+    background_tasks.add_task(_run_sync)
+    return {"status": "accepted", "connector_id": connector_id}

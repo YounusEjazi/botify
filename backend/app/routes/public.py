@@ -117,7 +117,7 @@ async def submit_ticket(
         (
             i
             for i in tenant.integrations
-            if i.enabled and i.kind in {"salesforce", "webhook", "email"}
+            if i.enabled and i.kind in {"salesforce", "webhook", "email", "zendesk"}
         ),
         None,
     )
@@ -157,6 +157,16 @@ async def submit_ticket(
                 public_config=integration.config,
                 secret=secret,
                 tenant=tenant,
+            )
+        elif integration.kind == "zendesk":
+            from ..actions.zendesk import submit_zendesk_ticket
+
+            result = await submit_zendesk_ticket(
+                tenant=tenant,
+                public_config=integration.config,
+                secret=secret,
+                fields={"subject": payload.subject, "name": payload.name, "email": payload.email},
+                description=description,
             )
         else:  # email
             from ..actions.email import EmailAction

@@ -223,3 +223,48 @@ class DocumentOut(BaseModel):
 class DocumentFromUrl(BaseModel):
     url: str
     title: str | None = None
+
+
+class MCPTestRequest(BaseModel):
+    server_url: str
+    auth_token: str = ""
+    auth_header: str = "Authorization"
+
+
+class MCPTestResult(BaseModel):
+    ok: bool
+    detail: str = ""
+    tools: list[str] = []
+
+
+# ─── Connector schemas ────────────────────────────────────────────────────
+
+
+class ConnectorCreate(BaseModel):
+    kind: str  # "notion" | "gdrive"
+    name: str
+    config: dict[str, Any] = {}
+    secret: dict[str, Any] = {}
+    enabled: bool = True
+
+
+class ConnectorUpdate(BaseModel):
+    name: str | None = None
+    config: dict[str, Any] | None = None
+    secret: dict[str, Any] | None = None
+    enabled: bool | None = None
+
+
+class ConnectorOut(BaseModel):
+    id: str
+    kind: str
+    name: str
+    enabled: bool
+    status: str
+    last_synced_at: datetime | None
+    error_message: str | None
+    config: dict[str, Any]
+    has_secret: bool
+
+    class Config:
+        from_attributes = True

@@ -16,7 +16,9 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from ..actions.mcp_client import call_mcp_tool, fetch_mcp_tools
 from ..actions.registry import build_tools_for_tenant, execute_action
+from ..crypto import decrypt_dict
 from ..models import Tenant
 from ..rag.store import VectorStore, get_vector_store
 from . import llm, moderation
@@ -65,6 +67,7 @@ async def _execute_tool_call(
     tenant: Tenant,
     db: Session,
     store: VectorStore,
+    mcp_configs: dict[str, tuple[dict, dict]] | None = None,
 ) -> dict[str, Any]:
     """Dispatch a single tool call. Returns the result payload for the LLM."""
     if name == "search_knowledge_base":
@@ -79,6 +82,17 @@ async def _execute_tool_call(
             "data": "\n\n---\n\n".join(h["content"] for h in hits),
             "hits": hits,
         }
+
+    # Route MCP tool calls to the MCP client.
+    if name.startswith("mcp__") and mcp_configs:
+        for public_config, secret in mcp_configs.values():
+            return await call_mcp_tool(
+                tool_name=name,
+                args=args,
+                public_config=public_config,
+                secret=secret,
+            )
+        return {"status": "error", "error": f"No MCP integration found for tool {name!r}", "data": ""}
 
     # Otherwise dispatch to the per-tenant action registry.
     return await execute_action(name=name, args=args, tenant=tenant, db=db)
@@ -126,7 +140,27 @@ async def run_chat_turn(
 
     # ── Build tool list ────────────────────────────────────────────────
     tools = [_build_knowledge_tool(tenant)]
-    tools.extend(build_tools_for_tenant(tenant, db))
+    # Exclude the MCP placeholder — real MCP tools are appended below.
+    tools.extend(
+        t for t in build_tools_for_tenant(tenant, db)
+        if t.get("function", {}).get("name") != "__mcp_placeholder__"
+    )
+
+    # Discover and append MCP tools from any enabled MCP integrations.
+    # mcp_configs maps server_url → (public_config, secret) for call routing.
+    mcp_configs: dict[str, tuple[dict, dict]] = {}
+    for integration in tenant.integrations:
+        if not integration.enabled or integration.kind != "mcp":
+            continue
+        public_config = integration.config or {}
+        server_url = public_config.get("server_url", "")
+        if not server_url:
+            continue
+        secret = decrypt_dict(integration.encrypted_secret) if integration.encrypted_secret else {}
+        mcp_tools = await fetch_mcp_tools(public_config=public_config, secret=secret)
+        if mcp_tools:
+            tools.extend(mcp_tools)
+            mcp_configs[server_url] = (public_config, secret)
 
     thread: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     thread.extend(m for m in messages if m.get("role") in ("user", "assistant"))
@@ -173,7 +207,8 @@ async def run_chat_turn(
 
             try:
                 result = await _execute_tool_call(
-                    name=name, args=args, tenant=tenant, db=db, store=store
+                    name=name, args=args, tenant=tenant, db=db, store=store,
+                    mcp_configs=mcp_configs,
                 )
             except Exception as exc:
                 logger.exception("Tool %s failed for tenant=%s", name, tenant.slug)

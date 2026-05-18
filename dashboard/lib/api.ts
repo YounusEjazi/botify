@@ -94,6 +94,21 @@ export type Document = {
     created_at: string
 }
 
+export type MCPTestRequest = { server_url: string; auth_token?: string; auth_header?: string }
+export type MCPTestResult = { ok: boolean; detail: string; tools: string[] }
+
+export type Connector = {
+    id: string
+    kind: string
+    name: string
+    enabled: boolean
+    status: string  // "idle" | "syncing" | "ready" | "error"
+    last_synced_at: string | null
+    error_message: string | null
+    config: Record<string, any>
+    has_secret: boolean
+}
+
 export const api = {
     listTenants: () => call<Tenant[]>("/admin/tenants"),
     getTenant: (slug: string) => call<Tenant>(`/admin/tenants/${slug}`),
@@ -136,6 +151,26 @@ export const api = {
         call<any[]>(`/admin/tenants/${slug}/conversations`),
     getConversation: (id: string) =>
         call<any>(`/admin/conversations/${id}`),
+
+    testMCP: (body: MCPTestRequest) =>
+        call<MCPTestResult>("/admin/mcp/test", { method: "POST", body: JSON.stringify(body) }),
+
+    listConnectors: (slug: string) =>
+        call<Connector[]>(`/admin/tenants/${slug}/connectors`),
+    createConnector: (slug: string, body: any) =>
+        call<Connector>(`/admin/tenants/${slug}/connectors`, {
+            method: "POST", body: JSON.stringify(body),
+        }),
+    updateConnector: (id: string, body: any) =>
+        call<Connector>(`/admin/connectors/${id}`, {
+            method: "PATCH", body: JSON.stringify(body),
+        }),
+    deleteConnector: (id: string) =>
+        call<void>(`/admin/connectors/${id}`, { method: "DELETE" }),
+    syncConnector: (id: string) =>
+        call<{ status: string; connector_id: string }>(`/admin/connectors/${id}/sync`, {
+            method: "POST",
+        }),
 }
 
 // Used by client components to POST FormData (file uploads)

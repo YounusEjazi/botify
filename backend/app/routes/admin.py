@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import logging
 import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..actions.salesforce import test_salesforce_credentials
@@ -14,13 +15,15 @@ from ..auth import require_admin
 from ..chat import llm as chat_llm
 from ..crypto import encrypt_dict
 from ..db import get_db
-from ..models import Conversation, ConnectorSource, Document, Integration, Tenant
+from ..models import Conversation, ConnectorSource, Document, Integration, Message, Tenant
 from ..rag.indexer import fetch_url, index_document
 from ..rag.store import get_vector_store
 from ..schemas import (
+    AnalyticsOut,
     ConnectorCreate,
     ConnectorOut,
     ConnectorUpdate,
+    DailyCount,
     DocumentFromUrl,
     DocumentOut,
     EmbeddingConfigOut,
@@ -39,6 +42,7 @@ from ..schemas import (
     TenantCreate,
     TenantOut,
     TenantUpdate,
+    TopQuestion,
 )
 
 logger = logging.getLogger(__name__)
@@ -529,6 +533,81 @@ async def delete_all_documents(slug: str, db: Annotated[Session, Depends(get_db)
         await store.delete_document(tenant_id=tenant.id, document_id=doc.id, db=db)
         db.delete(doc)
     db.commit()
+
+
+# ─── Analytics ────────────────────────────────────────────────────────────
+
+
+@router.get("/tenants/{slug}/analytics", response_model=AnalyticsOut)
+def get_analytics(slug: str, db: Annotated[Session, Depends(get_db)]) -> AnalyticsOut:
+    tenant = _get_tenant_or_404(slug, db)
+    tid = tenant.id
+    now = datetime.now(timezone.utc)
+    cutoff_7d  = now - timedelta(days=7)
+    cutoff_30d = now - timedelta(days=30)
+
+    # ── Conversation counts ────────────────────────────────────────────
+    all_convos = db.scalars(select(Conversation).where(Conversation.tenant_id == tid)).all()
+    total_conversations = len(all_convos)
+    convos_7d  = sum(1 for c in all_convos if c.created_at and c.created_at.replace(tzinfo=timezone.utc) >= cutoff_7d)
+    convos_30d = sum(1 for c in all_convos if c.created_at and c.created_at.replace(tzinfo=timezone.utc) >= cutoff_30d)
+
+    # ── Messages ───────────────────────────────────────────────────────
+    all_msgs = db.scalars(
+        select(Message).join(Conversation).where(Conversation.tenant_id == tid)
+    ).all()
+    total_messages = len(all_msgs)
+    avg_msgs = round(total_messages / total_conversations, 2) if total_conversations else 0.0
+
+    # ── Ratings ────────────────────────────────────────────────────────
+    rating_positive = sum(1 for c in all_convos if c.rating == 1)
+    rating_negative = sum(1 for c in all_convos if c.rating == -1)
+    rating_neutral  = sum(1 for c in all_convos if c.rating == 0)
+    unrated         = sum(1 for c in all_convos if c.rating is None)
+
+    # ── Daily volume (last 30 days) ────────────────────────────────────
+    daily: dict[str, int] = {}
+    for c in all_convos:
+        if c.created_at and c.created_at.replace(tzinfo=timezone.utc) >= cutoff_30d:
+            day = c.created_at.strftime("%Y-%m-%d")
+            daily[day] = daily.get(day, 0) + 1
+    # Fill in zeroes for days with no conversations.
+    daily_counts: list[DailyCount] = []
+    for i in range(30):
+        day = (now - timedelta(days=29 - i)).strftime("%Y-%m-%d")
+        daily_counts.append(DailyCount(date=day, count=daily.get(day, 0)))
+
+    # ── Top questions (most frequent user messages) ────────────────────
+    freq: dict[str, int] = {}
+    for m in all_msgs:
+        if m.role == "user":
+            key = m.content.strip()[:120]
+            freq[key] = freq.get(key, 0) + 1
+    top_questions = [
+        TopQuestion(question=q, count=n)
+        for q, n in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:10]
+    ]
+
+    # ── Language breakdown ─────────────────────────────────────────────
+    lang_breakdown: dict[str, int] = {}
+    for c in all_convos:
+        lang = c.language or "unknown"
+        lang_breakdown[lang] = lang_breakdown.get(lang, 0) + 1
+
+    return AnalyticsOut(
+        total_conversations=total_conversations,
+        total_messages=total_messages,
+        avg_messages_per_conversation=avg_msgs,
+        conversations_last_7d=convos_7d,
+        conversations_last_30d=convos_30d,
+        rating_positive=rating_positive,
+        rating_negative=rating_negative,
+        rating_neutral=rating_neutral,
+        unrated=unrated,
+        daily_conversations=daily_counts,
+        top_questions=top_questions,
+        language_breakdown=lang_breakdown,
+    )
 
 
 # ─── Conversations ─────────────────────────────────────────────────────────

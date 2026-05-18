@@ -83,6 +83,33 @@ export type Integration = {
     has_secret: boolean
 }
 
+export type RetrievalConfig = {
+    mode: "hybrid" | "vector"
+    candidate_k: number
+    rerank_enabled: boolean
+    rerank_provider: string
+    rerank_model: string
+    rerank_top_k: number
+    has_rerank_api_key: boolean
+}
+
+export type DailyCount = { date: string; count: number }
+export type TopQuestion = { question: string; count: number }
+export type Analytics = {
+    total_conversations: number
+    total_messages: number
+    avg_messages_per_conversation: number
+    conversations_last_7d: number
+    conversations_last_30d: number
+    rating_positive: number
+    rating_negative: number
+    rating_neutral: number
+    unrated: number
+    daily_conversations: DailyCount[]
+    top_questions: TopQuestion[]
+    language_breakdown: Record<string, number>
+}
+
 export type Document = {
     id: string
     title: string
@@ -124,6 +151,9 @@ export const api = {
 
     getEmbeddingConfig: (slug: string) =>
         call<EmbeddingConfig>(`/admin/tenants/${slug}/embedding`),
+
+    getRetrievalConfig: (slug: string) =>
+        call<RetrievalConfig>(`/admin/tenants/${slug}/retrieval`),
 
     listIntegrations: (slug: string) =>
         call<Integration[]>(`/admin/tenants/${slug}/integrations`),
@@ -171,6 +201,9 @@ export const api = {
         call<{ status: string; connector_id: string }>(`/admin/connectors/${id}/sync`, {
             method: "POST",
         }),
+
+    getAnalytics: (slug: string) =>
+        call<Analytics>(`/admin/tenants/${slug}/analytics`),
 }
 
 // Used by client components to POST FormData (file uploads)

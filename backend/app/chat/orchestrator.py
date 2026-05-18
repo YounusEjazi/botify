@@ -22,6 +22,7 @@ from ..crypto import decrypt_dict
 from ..models import Tenant
 from ..rag.store import VectorStore, get_vector_store
 from . import llm, moderation
+from .rewriter import rewrite_query
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ async def _execute_tool_call(
     tenant: Tenant,
     db: Session,
     store: VectorStore,
+    thread: list[dict[str, Any]],
+    llm_cfg: dict[str, Any],
     mcp_configs: dict[str, tuple[dict, dict]] | None = None,
 ) -> dict[str, Any]:
     """Dispatch a single tool call. Returns the result payload for the LLM."""
@@ -76,6 +79,7 @@ async def _execute_tool_call(
         if not query:
             return {"data": "", "hits": [], "error": "Empty query"}
 
+        query = await rewrite_query(query, thread, llm_cfg)
         hits = await store.search(tenant_id=tenant.id, query=query, k=k, db=db, tenant=tenant)
         # `data` is what the LLM sees; `hits` is structured for the UI.
         return {
@@ -208,7 +212,7 @@ async def run_chat_turn(
             try:
                 result = await _execute_tool_call(
                     name=name, args=args, tenant=tenant, db=db, store=store,
-                    mcp_configs=mcp_configs,
+                    thread=thread, llm_cfg=llm_cfg, mcp_configs=mcp_configs,
                 )
             except Exception as exc:
                 logger.exception("Tool %s failed for tenant=%s", name, tenant.slug)

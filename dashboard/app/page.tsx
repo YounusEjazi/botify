@@ -1,5 +1,8 @@
 import Link from "next/link"
 import { Logo } from "@/components/Logo"
+import { cookies } from "next/headers"
+import { verifySession, SESSION_COOKIE } from "@/lib/session"
+import { logoutAction } from "@/app/login/actions"
 
 /* ─── Marketing homepage — server component, no client hooks ────────────── */
 
@@ -70,7 +73,10 @@ const HOW_IT_WORKS = [
     },
 ]
 
-export default function HomePage() {
+export default async function HomePage() {
+    const cookieStore = await cookies()
+    const session = await verifySession(cookieStore.get(SESSION_COOKIE)?.value)
+
     return (
         <>
             <style>{`
@@ -327,10 +333,28 @@ export default function HomePage() {
                     </Link>
                     <div className="home-nav-links">
                         <Link href="/docs" className="home-nav-link">Docs</Link>
-                        <Link href="/login" className="home-nav-link">Sign in</Link>
-                        <Link href="/login" className="btn primary small" style={{ textDecoration: "none", marginLeft: 8 }}>
-                            Get started
-                        </Link>
+                        {session ? (
+                            <>
+                                <span style={{ fontSize: 13, color: "var(--ink-mute)", padding: "6px 8px" }}>
+                                    {session.email}
+                                </span>
+                                <Link href="/tenants" className="btn primary small" style={{ textDecoration: "none", marginLeft: 8 }}>
+                                    Dashboard →
+                                </Link>
+                                <form action={logoutAction} style={{ display: "inline" }}>
+                                    <button type="submit" className="home-nav-link" style={{ background: "none", border: "none", cursor: "pointer", font: "inherit" }}>
+                                        Sign out
+                                    </button>
+                                </form>
+                            </>
+                        ) : (
+                            <>
+                                <Link href="/login" className="home-nav-link">Sign in</Link>
+                                <Link href="/login" className="btn primary small" style={{ textDecoration: "none", marginLeft: 8 }}>
+                                    Get started
+                                </Link>
+                            </>
+                        )}
                     </div>
                 </div>
             </nav>
@@ -349,9 +373,15 @@ export default function HomePage() {
                         knowledge base, and integrations — configured from a shared dashboard.
                     </p>
                     <div className="home-hero-ctas">
-                        <Link href="/login" className="btn primary" style={{ fontSize: 15, padding: "12px 24px", textDecoration: "none" }}>
-                            Get started →
-                        </Link>
+                        {session ? (
+                            <Link href="/tenants" className="btn primary" style={{ fontSize: 15, padding: "12px 24px", textDecoration: "none" }}>
+                                Go to Dashboard →
+                            </Link>
+                        ) : (
+                            <Link href="/login" className="btn primary" style={{ fontSize: 15, padding: "12px 24px", textDecoration: "none" }}>
+                                Get started →
+                            </Link>
+                        )}
                         <Link href="/docs" className="btn" style={{ fontSize: 15, padding: "12px 24px", textDecoration: "none" }}>
                             View docs →
                         </Link>

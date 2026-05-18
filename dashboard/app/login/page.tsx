@@ -1,11 +1,17 @@
 import LoginForm from "./LoginForm"
 import Link from "next/link"
+import { cookies } from "next/headers"
+import { verifySession, SESSION_COOKIE } from "@/lib/session"
+import { redirect } from "next/navigation"
 
 export const metadata = {
     title: "Sign in — Bot-ify",
 }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+    const cookieStore = await cookies()
+    const session = await verifySession(cookieStore.get(SESSION_COOKIE)?.value)
+    if (session) redirect("/tenants")
     return (
         <div
             style={{

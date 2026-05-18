@@ -66,6 +66,7 @@ out/
 next-env.d.ts
 .vercel
 .turbo
+*.tsbuildinfo
 
 # ──── Vite / widget build ────────────────────────────────────────────────
 widget/dist/

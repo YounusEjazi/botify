@@ -83,29 +83,28 @@ export default function DocsPage() {
                     }}>
                         On this page
                     </div>
+                    <style>{`
+                        .docs-nav-link {
+                            display: block;
+                            padding: 6px 10px;
+                            margin: 0 -10px;
+                            text-decoration: none;
+                            color: var(--ink-soft);
+                            font-size: 13px;
+                            border-left: 2px solid transparent;
+                            transition: color 0.1s, border-left-color 0.1s;
+                        }
+                        .docs-nav-link:hover {
+                            color: var(--ink);
+                            border-left-color: var(--accent);
+                        }
+                    `}</style>
                     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                         {sections.map((s) => (
                             <a
                                 key={s.id}
                                 href={`#${s.id}`}
-                                style={{
-                                    display: "block",
-                                    padding: "6px 10px",
-                                    margin: "0 -10px",
-                                    textDecoration: "none",
-                                    color: "var(--ink-soft)",
-                                    fontSize: 13,
-                                    borderLeft: "2px solid transparent",
-                                    transition: "color 0.1s",
-                                }}
-                                onMouseEnter={(e) => {
-                                    (e.currentTarget as HTMLAnchorElement).style.color = "var(--ink)"
-                                    ;(e.currentTarget as HTMLAnchorElement).style.borderLeftColor = "var(--accent)"
-                                }}
-                                onMouseLeave={(e) => {
-                                    (e.currentTarget as HTMLAnchorElement).style.color = "var(--ink-soft)"
-                                    ;(e.currentTarget as HTMLAnchorElement).style.borderLeftColor = "transparent"
-                                }}
+                                className="docs-nav-link"
                             >
                                 {s.label}
                             </a>

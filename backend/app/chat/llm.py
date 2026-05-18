@@ -8,6 +8,7 @@ https://docs.litellm.ai/docs/providers.
 API keys come from environment — LiteLLM picks them up automatically. If you
 want per-tenant API keys later, pass them through to `completion()` as
 `api_key=...` from the tenant config.
+Azure OpenAI tenant configs can also pass `api_base` and `api_version`.
 """
 from __future__ import annotations
 

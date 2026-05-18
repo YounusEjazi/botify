@@ -58,6 +58,7 @@ export type LLMConfig = {
     model: string
     temperature: number
     api_base: string
+    api_version: string
     has_api_key: boolean
 }
 

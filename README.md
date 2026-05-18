@@ -276,12 +276,13 @@ LiteLLM under the hood. Anything LiteLLM supports works as a tenant LLM. Built-i
 | DeepSeek | deepseek-chat, deepseek-reasoner | — |
 | Google Gemini | gemini-2.5-flash, gemini-2.5-pro | text-embedding-004 |
 | Groq | llama-3.3-70b, llama-3.1-8b | — |
+| Azure OpenAI | azure/gpt-4o, azure/gpt-4o-mini, azure/gpt-4.1, azure/o4-mini | Azure OpenAI embeddings via Custom |
 | Azure AI Foundry | azure_ai/command-r-plus, azure_ai/mistral-large-latest, azure_ai/ai21-jamba-instruct, azure_ai/claude-opus-4-1 | — |
 | Voyage AI | — | voyage-3, voyage-3-lite, voyage-code-3 |
 | Cohere | — | embed-english-v3.0, embed-multilingual-v3.0 |
 | Custom | any OpenAI-compatible | any OpenAI-compatible |
 
-Azure AI Foundry uses LiteLLM's `azure_ai/<model>` provider plus an Azure AI endpoint in `api_base`. For Azure Claude, use the `/anthropic` endpoint from Foundry.
+Azure OpenAI uses LiteLLM's `azure/<deployment>` provider plus your Azure OpenAI endpoint in `api_base` and an Azure API version such as `2024-12-01-preview`. Azure AI Foundry uses `azure_ai/<deployment>` plus an Azure AI endpoint in `api_base`; for Azure Claude, use the `/anthropic` endpoint from Foundry.
 
 DeepSeek/Anthropic don't offer embeddings — typical config is `{ chat: DeepSeek, embeddings: OpenAI }`. The dashboard's **Test connection** button does a one-token live call against each provider before you save.
 

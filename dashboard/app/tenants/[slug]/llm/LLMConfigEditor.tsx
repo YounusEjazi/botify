@@ -12,6 +12,9 @@ type Provider = {
     apiBaseRequired?: boolean
     apiBaseHint?: string
     apiBasePlaceholder?: string
+    apiVersionDefault?: string
+    apiVersionHint?: string
+    apiVersionRequired?: boolean
     apiKeyHint: string
     docsUrl: string
 }
@@ -57,18 +60,35 @@ const PROVIDERS: Provider[] = [
         docsUrl: "https://console.groq.com/keys",
     },
     {
+        id: "azure_openai",
+        label: "Azure OpenAI",
+        models: ["azure/gpt-4o", "azure/gpt-4o-mini", "azure/gpt-4.1", "azure/o4-mini"],
+        modelHint: "LiteLLM Azure OpenAI model string. Use azure/<deployment-name>; if you type only the deployment name, Botify adds azure/ before testing or saving.",
+        apiBaseRequired: true,
+        apiBaseHint: "Required. Use the Azure OpenAI endpoint, e.g. https://your-resource.openai.azure.com/.",
+        apiBasePlaceholder: "https://your-resource.openai.azure.com/",
+        apiVersionDefault: "2024-12-01-preview",
+        apiVersionHint: "Required by Azure OpenAI. This should match the API version from Azure AI Foundry.",
+        apiVersionRequired: true,
+        apiKeyHint: "Azure OpenAI resource key",
+        docsUrl: "https://docs.litellm.ai/docs/providers/azure",
+    },
+    {
         id: "azure_ai",
         label: "Azure AI Foundry",
         models: [
+            "azure_ai/claude-haiku-4-5-global",
+            "azure_ai/claude-haiku-4-5",
+            "azure_ai/claude-sonnet-4-5",
+            "azure_ai/claude-opus-4-1",
             "azure_ai/command-r-plus",
             "azure_ai/mistral-large-latest",
             "azure_ai/ai21-jamba-instruct",
-            "azure_ai/claude-opus-4-1",
         ],
-        modelHint: "LiteLLM Azure AI model string. Keep the azure_ai/ prefix.",
+        modelHint: "LiteLLM Azure AI Foundry model string. Use azure_ai/<deployment-name>; if you type only the deployment name, Botify adds azure_ai/ before testing or saving.",
         apiBaseRequired: true,
-        apiBaseHint: "Required. Use the Azure AI Foundry inference endpoint. For Azure Claude, use the /anthropic endpoint.",
-        apiBasePlaceholder: "https://your-model.region.inference.ai.azure.com/",
+        apiBaseHint: "Required. For Claude, use the Azure AI Foundry /anthropic endpoint. For other Foundry serverless models, use the model inference endpoint.",
+        apiBasePlaceholder: "https://your-resource.services.ai.azure.com/anthropic",
         apiKeyHint: "Azure AI Foundry endpoint key",
         docsUrl: "https://docs.litellm.ai/docs/providers/azure_ai",
     },
@@ -82,7 +102,21 @@ const PROVIDERS: Provider[] = [
 ]
 
 function providerOf(id: string): Provider {
-    return PROVIDERS.find((p) => p.id === id) || PROVIDERS[0]
+    return PROVIDERS.find((p) => p.id === providerIdFor(id)) || PROVIDERS[0]
+}
+
+function providerIdFor(id: string): string {
+    return id === "azure" ? "azure_openai" : id
+}
+
+function modelForProvider(providerId: string, rawModel: string): string {
+    const trimmed = rawModel.trim()
+    if (!trimmed) return ""
+    if (!trimmed.includes("/")) {
+        if (providerId === "azure_openai") return `azure/${trimmed}`
+        if (providerId === "azure_ai") return `azure_ai/${trimmed}`
+    }
+    return trimmed
 }
 
 export function LLMConfigEditor({
@@ -92,10 +126,12 @@ export function LLMConfigEditor({
     slug: string
     initial: LLMConfig
 }) {
-    const [providerId, setProviderId] = useState(initial.provider || "openai")
-    const [model, setModel] = useState(initial.model || providerOf(initial.provider || "openai").models[0] || "")
+    const initialProviderId = providerIdFor(initial.provider || "openai")
+    const [providerId, setProviderId] = useState(initialProviderId)
+    const [model, setModel] = useState(initial.model || providerOf(initialProviderId).models[0] || "")
     const [temperature, setTemperature] = useState(initial.temperature ?? 0)
     const [apiBase, setApiBase] = useState(initial.api_base || "")
+    const [apiVersion, setApiVersion] = useState(initial.api_version || providerOf(initialProviderId).apiVersionDefault || "")
     const [apiKey, setApiKey] = useState("")
     const [hasKey, setHasKey] = useState(initial.has_api_key)
 
@@ -113,6 +149,19 @@ export function LLMConfigEditor({
         if (p.models.length && !p.models.includes(model)) {
             setModel(p.models[0])
         }
+        setApiVersion(p.apiVersionDefault || "")
+        setTestResult(null)
+    }
+
+    function requestBody() {
+        return {
+            provider: providerId,
+            model: modelForProvider(providerId, model),
+            temperature,
+            api_base: apiBase.trim(),
+            api_version: apiVersion.trim(),
+            api_key: apiKey || null,
+        }
     }
 
     async function save(e: React.FormEvent) {
@@ -121,23 +170,19 @@ export function LLMConfigEditor({
         setError(null)
         setSavedAt(null)
         try {
-            const body = {
-                provider: providerId,
-                model,
-                temperature,
-                api_base: apiBase,
-                api_key: apiKey || null,
-            }
             const resp = await fetch(`/api/proxy/tenants/${slug}/llm`, {
                 method: "PUT",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify(body),
+                body: JSON.stringify(requestBody()),
             })
             if (!resp.ok) {
                 throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText)
             }
             const next: LLMConfig = await resp.json()
             setHasKey(next.has_api_key)
+            setModel(next.model)
+            setApiBase(next.api_base || "")
+            setApiVersion(next.api_version || "")
             setApiKey("")
             setSavedAt(new Date().toLocaleTimeString())
         } catch (e: any) {
@@ -153,7 +198,12 @@ export function LLMConfigEditor({
         try {
             const resp = await fetch(`/api/proxy/tenants/${slug}/llm/test`, {
                 method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(requestBody()),
             })
+            if (!resp.ok) {
+                throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText)
+            }
             const data: LLMTestResult = await resp.json()
             setTestResult(data)
         } catch (e: any) {
@@ -240,6 +290,18 @@ export function LLMConfigEditor({
                     required={provider.apiBaseRequired}
                 />
             </Field>
+
+            {(provider.apiVersionRequired || provider.apiVersionHint || apiVersion) && (
+                <Field label={`API version${provider.apiVersionRequired ? "" : " (optional)"}`} hint={provider.apiVersionHint || "Forwarded to LiteLLM as api_version."}>
+                    <input
+                        className="input mono"
+                        placeholder={provider.apiVersionDefault || "2024-12-01-preview"}
+                        value={apiVersion}
+                        onChange={(e) => setApiVersion(e.target.value)}
+                        required={provider.apiVersionRequired}
+                    />
+                </Field>
+            )}
 
             <Field label={`Temperature: ${temperature.toFixed(2)}`} hint="0 = deterministic; higher = more creative. Keep at 0 for support bots.">
                 <input

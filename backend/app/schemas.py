@@ -121,6 +121,7 @@ class LLMConfigOut(BaseModel):
     model: str = ""
     temperature: float = 0.0
     api_base: str = ""
+    api_version: str = ""
     has_api_key: bool = False
 
 
@@ -129,6 +130,7 @@ class LLMConfigUpdate(BaseModel):
     model: str
     temperature: float = 0.0
     api_base: str = ""
+    api_version: str = ""
     # If None or empty, the existing key is preserved. Send a new value to rotate.
     api_key: str | None = None
 

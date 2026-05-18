@@ -82,7 +82,7 @@ class Tenant(Base):
     default_language: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
 
     # LLM config: {"provider": "openai", "model": "gpt-4o-mini",
-    #              "temperature": 0.0, "api_base": "..."}
+    #              "temperature": 0.0, "api_base": "...", "api_version": "..."}
     # Any LiteLLM-supported model string works.
     llm_config: Mapped[dict[str, Any]] = mapped_column(_JSON, default=dict, nullable=False)
 

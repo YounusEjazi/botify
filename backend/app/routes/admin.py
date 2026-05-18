@@ -136,17 +136,41 @@ def delete_tenant(
 # ─── LLM connector ─────────────────────────────────────────────────────────
 
 
-@router.get("/tenants/{slug}/llm", response_model=LLMConfigOut)
-def get_llm_config(slug: str, db: Annotated[Session, Depends(get_db)]) -> LLMConfigOut:
-    tenant = _get_tenant_or_404(slug, db)
-    cfg = tenant.llm_config or {}
+def _llm_config_from_payload(payload: LLMConfigUpdate) -> dict[str, Any]:
+    model = payload.model.strip()
+    if model and "/" not in model:
+        if payload.provider in {"azure", "azure_openai"}:
+            model = f"azure/{model}"
+        elif payload.provider == "azure_ai":
+            model = f"azure_ai/{model}"
+    cfg: dict[str, Any] = {
+        "provider": payload.provider,
+        "model": model,
+        "temperature": payload.temperature,
+    }
+    if api_base := payload.api_base.strip():
+        cfg["api_base"] = api_base
+    if api_version := payload.api_version.strip():
+        cfg["api_version"] = api_version
+    return cfg
+
+
+def _llm_config_out(tenant: Tenant, cfg: dict[str, Any]) -> LLMConfigOut:
     return LLMConfigOut(
         provider=cfg.get("provider", ""),
         model=cfg.get("model", ""),
         temperature=float(cfg.get("temperature", 0.0)),
         api_base=cfg.get("api_base", ""),
+        api_version=cfg.get("api_version", ""),
         has_api_key=bool(tenant.llm_api_key_encrypted),
     )
+
+
+@router.get("/tenants/{slug}/llm", response_model=LLMConfigOut)
+def get_llm_config(slug: str, db: Annotated[Session, Depends(get_db)]) -> LLMConfigOut:
+    tenant = _get_tenant_or_404(slug, db)
+    cfg = tenant.llm_config or {}
+    return _llm_config_out(tenant, cfg)
 
 
 @router.put("/tenants/{slug}/llm", response_model=LLMConfigOut)
@@ -157,13 +181,7 @@ def update_llm_config(
 ) -> LLMConfigOut:
     tenant = _get_tenant_or_404(slug, db)
 
-    new_cfg: dict[str, Any] = {
-        "provider": payload.provider,
-        "model": payload.model,
-        "temperature": payload.temperature,
-    }
-    if payload.api_base:
-        new_cfg["api_base"] = payload.api_base
+    new_cfg = _llm_config_from_payload(payload)
     tenant.llm_config = new_cfg
 
     if payload.api_key:
@@ -171,13 +189,7 @@ def update_llm_config(
 
     db.commit()
     db.refresh(tenant)
-    return LLMConfigOut(
-        provider=new_cfg.get("provider", ""),
-        model=new_cfg.get("model", ""),
-        temperature=float(new_cfg.get("temperature", 0.0)),
-        api_base=new_cfg.get("api_base", ""),
-        has_api_key=bool(tenant.llm_api_key_encrypted),
-    )
+    return _llm_config_out(tenant, new_cfg)
 
 
 @router.delete("/tenants/{slug}/llm/key", status_code=status.HTTP_204_NO_CONTENT)
@@ -189,11 +201,18 @@ def delete_llm_api_key(slug: str, db: Annotated[Session, Depends(get_db)]) -> No
 
 @router.post("/tenants/{slug}/llm/test", response_model=LLMTestResult)
 async def test_llm_config(
-    slug: str, db: Annotated[Session, Depends(get_db)]
+    slug: str,
+    db: Annotated[Session, Depends(get_db)],
+    payload: LLMConfigUpdate | None = None,
 ) -> LLMTestResult:
-    """Fire a one-token completion against the tenant's current LLM config."""
+    """Fire a one-token completion against the form config, or saved config."""
     tenant = _get_tenant_or_404(slug, db)
     cfg = chat_llm.effective_llm_config(tenant)
+    if payload:
+        cfg.update(_llm_config_from_payload(payload))
+        cfg.pop("provider", None)
+        if payload.api_key:
+            cfg["api_key"] = payload.api_key
     if not cfg.get("model"):
         return LLMTestResult(ok=False, detail="No model configured.")
     try:

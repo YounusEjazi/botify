@@ -27,6 +27,7 @@ from ..schemas import (
     ChatRequest,
     ChatResponse,
     PublicTenantConfig,
+    RateRequest,
     SourceHit,
     TicketRequest,
 )
@@ -177,6 +178,27 @@ async def submit_ticket(
     except Exception as exc:
         logger.exception("Ticket submission failed for tenant=%s", tenant.slug)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
+@router.post("/rate", status_code=204)
+async def rate_conversation(
+    payload: RateRequest,
+    request: Request,
+    tenant: Annotated[Tenant, Depends(resolve_tenant)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    """Widget calls this when the user thumbs-up or thumbs-down a response."""
+    enforce_origin(request, tenant)
+    convo = db.scalar(
+        select(Conversation).where(
+            Conversation.tenant_id == tenant.id,
+            Conversation.session_id == payload.session_id,
+        )
+    )
+    if not convo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    convo.rating = payload.rating
+    db.commit()
 
 
 def _persist_conversation(

@@ -93,6 +93,23 @@ export type RetrievalConfig = {
     has_rerank_api_key: boolean
 }
 
+export type DailyCount = { date: string; count: number }
+export type TopQuestion = { question: string; count: number }
+export type Analytics = {
+    total_conversations: number
+    total_messages: number
+    avg_messages_per_conversation: number
+    conversations_last_7d: number
+    conversations_last_30d: number
+    rating_positive: number
+    rating_negative: number
+    rating_neutral: number
+    unrated: number
+    daily_conversations: DailyCount[]
+    top_questions: TopQuestion[]
+    language_breakdown: Record<string, number>
+}
+
 export type Document = {
     id: string
     title: string
@@ -149,6 +166,9 @@ export const api = {
         call<any[]>(`/admin/tenants/${slug}/conversations`),
     getConversation: (id: string) =>
         call<any>(`/admin/conversations/${id}`),
+
+    getAnalytics: (slug: string) =>
+        call<Analytics>(`/admin/tenants/${slug}/analytics`),
 }
 
 // Used by client components to POST FormData (file uploads)

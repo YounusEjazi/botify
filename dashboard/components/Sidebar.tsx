@@ -13,6 +13,7 @@ const SECTIONS = [
     { href: "/retrieval",      label: "Retrieval" },
     { href: "/integrations",   label: "Integrations" },
     { href: "/conversations",  label: "Conversations" },
+    { href: "/analytics",      label: "Analytics" },
     { href: "/danger",         label: "Danger zone" },
 ]
 

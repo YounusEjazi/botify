@@ -20,6 +20,7 @@ from ..actions.registry import build_tools_for_tenant, execute_action
 from ..models import Tenant
 from ..rag.store import VectorStore, get_vector_store
 from . import llm, moderation
+from .rewriter import rewrite_query
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,8 @@ async def _execute_tool_call(
     tenant: Tenant,
     db: Session,
     store: VectorStore,
+    thread: list[dict[str, Any]],
+    llm_cfg: dict[str, Any],
 ) -> dict[str, Any]:
     """Dispatch a single tool call. Returns the result payload for the LLM."""
     if name == "search_knowledge_base":
@@ -73,6 +76,7 @@ async def _execute_tool_call(
         if not query:
             return {"data": "", "hits": [], "error": "Empty query"}
 
+        query = await rewrite_query(query, thread, llm_cfg)
         hits = await store.search(tenant_id=tenant.id, query=query, k=k, db=db, tenant=tenant)
         # `data` is what the LLM sees; `hits` is structured for the UI.
         return {
@@ -173,7 +177,8 @@ async def run_chat_turn(
 
             try:
                 result = await _execute_tool_call(
-                    name=name, args=args, tenant=tenant, db=db, store=store
+                    name=name, args=args, tenant=tenant, db=db, store=store,
+                    thread=thread, llm_cfg=llm_cfg,
                 )
             except Exception as exc:
                 logger.exception("Tool %s failed for tenant=%s", name, tenant.slug)

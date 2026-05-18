@@ -30,6 +30,9 @@ const ticketPrefill = ref({ subject: "", description: "", name: "", email: "" })
 const ticketSubmitting = ref(false)
 const ticketResult = ref(null)
 
+// Rating state — null = unrated, 1 = thumbs up, -1 = thumbs down
+const rating = ref(null)
+
 // ─── Bootstrap ────────────────────────────────────────────────────────
 const client = computed(() =>
     createClient({ tenant: props.tenant, apiBase: props.apiBase })
@@ -161,6 +164,16 @@ function resetTicket() {
     ticketPrefill.value = { subject: "", description: "", name: "", email: "" }
 }
 
+async function submitRating(value) {
+    if (rating.value !== null) return
+    rating.value = value
+    try {
+        await client.value.rate({ sessionId: sessionId.value, rating: value })
+    } catch {
+        // Rating is best-effort — don't surface errors to the user.
+    }
+}
+
 watch(messages, () => nextTick(() => scrollToBottom()), { deep: true })
 
 const EMOJIS = ["😊","😄","😂","🙂","🤩","😮","😟","😢","😱","🎉","🎊","❤️","✌️","👍","👎","🙏"]
@@ -240,20 +253,26 @@ const EMOJIS = ["😊","😄","😂","🙂","🤩","😮","😟","😢","😱","
                     </div>
                     <div class="cw-msg-body">
                         <div class="cw-bubble" :class="m.role" v-html="renderMarkdown(m.content)"/>
-                        <!-- Sources as chips -->
-                        <div v-if="m.sources" class="cw-sources">
-                            <a
-                                v-for="(s, j) in m.sources"
-                                :key="j"
-                                class="cw-source-chip"
-                                :href="s.source_url || '#'"
-                                :target="s.source_url ? '_blank' : ''"
-                                rel="noopener"
-                            >
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                {{ s.title || `Source ${j + 1}` }}
-                            </a>
-                        </div>
+                        <!-- Sources — collapsible toggle -->
+                        <details v-if="m.sources" class="cw-sources">
+                            <summary class="cw-sources-toggle">
+                                <svg class="cw-sources-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                {{ m.sources.length }} source{{ m.sources.length === 1 ? '' : 's' }}
+                            </summary>
+                            <div class="cw-sources-list">
+                                <a
+                                    v-for="(s, j) in m.sources"
+                                    :key="j"
+                                    class="cw-source-chip"
+                                    :href="s.source_url || '#'"
+                                    :target="s.source_url ? '_blank' : ''"
+                                    rel="noopener"
+                                >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    {{ s.title || `Source ${j + 1}` }}
+                                </a>
+                            </div>
+                        </details>
                     </div>
                 </div>
 
@@ -267,6 +286,26 @@ const EMOJIS = ["😊","😄","😂","🙂","🤩","😮","😟","😢","😱","
                     <div class="cw-bubble assistant cw-typing">
                         <span></span><span></span><span></span>
                     </div>
+                </div>
+
+                <!-- Rating buttons — shown after at least one bot reply, above the last message -->
+                <div v-if="messages.some(m => m.role === 'assistant') && !sending" class="cw-rating">
+                    <span class="cw-rating-label">Was this helpful?</span>
+                    <button
+                        class="cw-rating-btn"
+                        :class="{ active: rating === 1, disabled: rating !== null }"
+                        @click="submitRating(1)"
+                        :disabled="rating !== null"
+                        aria-label="Thumbs up"
+                    >👍</button>
+                    <button
+                        class="cw-rating-btn"
+                        :class="{ active: rating === -1, disabled: rating !== null }"
+                        @click="submitRating(-1)"
+                        :disabled="rating !== null"
+                        aria-label="Thumbs down"
+                    >👎</button>
+                    <span v-if="rating !== null" class="cw-rating-thanks">Thanks!</span>
                 </div>
             </main>
 
@@ -573,7 +612,17 @@ export default { methods: { renderMarkdown } }
 }
 
 /* Source chips */
-.cw-sources { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.cw-sources { margin-top: 6px; }
+.cw-sources-toggle {
+    display: flex; align-items: center; gap: 4px;
+    list-style: none; cursor: pointer; user-select: none;
+    font-size: 11px; color: #999;
+    width: fit-content;
+}
+.cw-sources-toggle::-webkit-details-marker { display: none; }
+.cw-sources-arrow { transition: transform 0.2s ease; flex-shrink: 0; }
+details[open] .cw-sources-arrow { transform: rotate(90deg); }
+.cw-sources-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .cw-source-chip {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 11px; color: #666;
@@ -721,4 +770,23 @@ export default { methods: { renderMarkdown } }
     background: #fff;
 }
 .cw-powered strong { color: #999; font-weight: 600; }
+
+.cw-rating {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 2px 0;
+    border-top: 1px solid #efefef;
+    margin-top: 4px;
+}
+.cw-rating-label { font-size: 12px; color: #888; }
+.cw-rating-btn {
+    background: none; border: 1px solid #e5e5e5; border-radius: 6px;
+    padding: 3px 8px; font-size: 14px; cursor: pointer; line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+}
+.cw-rating-btn:hover:not(:disabled) { background: #f5f5f5; border-color: #ccc; }
+.cw-rating-btn.active { background: #f0fdf4; border-color: #22c55e; }
+.cw-rating-btn.disabled { opacity: 0.5; cursor: default; }
+.cw-rating-thanks { font-size: 12px; color: #22c55e; }
 </style>

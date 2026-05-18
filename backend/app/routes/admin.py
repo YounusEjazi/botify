@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ..actions.salesforce import test_salesforce_credentials
 from ..auth import require_admin
 from ..chat import llm as chat_llm
-from ..crypto import encrypt_dict
+from ..crypto import EncryptionConfigError, encrypt_dict
 from ..db import get_db
 from ..models import Conversation, ConnectorSource, Document, Integration, Message, Tenant
 from ..rag.indexer import fetch_url, index_document
@@ -52,6 +52,16 @@ router = APIRouter(
     tags=["admin"],
     dependencies=[Depends(require_admin)],
 )
+
+
+def _encrypt_secret(data: dict[str, Any]) -> bytes:
+    try:
+        return encrypt_dict(data)
+    except EncryptionConfigError as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
 
 
 # ─── Tenants ───────────────────────────────────────────────────────────────
@@ -185,7 +195,7 @@ def update_llm_config(
     tenant.llm_config = new_cfg
 
     if payload.api_key:
-        tenant.llm_api_key_encrypted = encrypt_dict({"api_key": payload.api_key})
+        tenant.llm_api_key_encrypted = _encrypt_secret({"api_key": payload.api_key})
 
     db.commit()
     db.refresh(tenant)
@@ -257,7 +267,7 @@ def update_embedding_config(
     tenant.embedding_config = new_cfg
 
     if payload.api_key:
-        tenant.embedding_api_key_encrypted = encrypt_dict({"api_key": payload.api_key})
+        tenant.embedding_api_key_encrypted = _encrypt_secret({"api_key": payload.api_key})
 
     db.commit()
     db.refresh(tenant)
@@ -332,7 +342,7 @@ def update_retrieval_config(
         },
     }
     if payload.rerank_api_key:
-        tenant.rerank_api_key_encrypted = encrypt_dict({"api_key": payload.rerank_api_key})
+        tenant.rerank_api_key_encrypted = _encrypt_secret({"api_key": payload.rerank_api_key})
     db.commit()
     db.refresh(tenant)
     return _retrieval_out(tenant)
@@ -400,7 +410,7 @@ def create_integration(
         name=payload.name,
         config=payload.config,
         enabled=payload.enabled,
-        encrypted_secret=encrypt_dict(payload.secret) if payload.secret else None,
+        encrypted_secret=_encrypt_secret(payload.secret) if payload.secret else None,
     )
     db.add(integration)
     db.commit()
@@ -428,7 +438,7 @@ def update_integration(
     integration.config = payload.config
     integration.enabled = payload.enabled
     if payload.secret:
-        integration.encrypted_secret = encrypt_dict(payload.secret)
+        integration.encrypted_secret = _encrypt_secret(payload.secret)
     db.commit()
     db.refresh(integration)
     return IntegrationOut(
@@ -767,7 +777,7 @@ def create_connector(
         name=payload.name,
         config=payload.config,
         enabled=payload.enabled,
-        encrypted_secret=encrypt_dict(payload.secret) if payload.secret else None,
+        encrypted_secret=_encrypt_secret(payload.secret) if payload.secret else None,
     )
     db.add(connector)
     db.commit()
@@ -792,7 +802,7 @@ def update_connector(
         connector.enabled = payload.enabled
     if payload.secret is not None:
         connector.encrypted_secret = (
-            encrypt_dict(payload.secret) if payload.secret else connector.encrypted_secret
+            _encrypt_secret(payload.secret) if payload.secret else connector.encrypted_secret
         )
     db.commit()
     db.refresh(connector)

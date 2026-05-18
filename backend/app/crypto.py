@@ -17,17 +17,28 @@ from cryptography.fernet import Fernet
 from .config import get_settings
 
 
+class EncryptionConfigError(RuntimeError):
+    """Raised when server-side encryption is not configured correctly."""
+
+
 @lru_cache
 def _fernet() -> Fernet:
     key = get_settings().encryption_key
     if not key:
-        raise RuntimeError(
+        raise EncryptionConfigError(
             "ENCRYPTION_KEY is not set. Generate one with:\n"
             "  python -c \"from cryptography.fernet import Fernet; "
             "print(Fernet.generate_key().decode())\""
         )
     # Accept either raw bytes or string.
-    return Fernet(key.encode() if isinstance(key, str) else key)
+    try:
+        return Fernet(key.encode() if isinstance(key, str) else key)
+    except ValueError as exc:
+        raise EncryptionConfigError(
+            "ENCRYPTION_KEY is invalid. It must be a 32-byte url-safe base64 "
+            "Fernet key. Generate one with: python -c \"from cryptography.fernet "
+            "import Fernet; print(Fernet.generate_key().decode())\""
+        ) from exc
 
 
 def encrypt_dict(data: dict[str, Any]) -> bytes:

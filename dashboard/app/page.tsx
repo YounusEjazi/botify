@@ -471,7 +471,7 @@ export default async function HomePage() {
                     <span className="home-footer-copy">© 2025 Bot-ify</span>
                     <div className="home-footer-links">
                         <Link href="/docs">Docs</Link>
-                        <a href="https://github.com/botify-io/botify" target="_blank" rel="noopener noreferrer">
+                        <a href="https://github.com/YounusEjazi/botify" target="_blank" rel="noopener noreferrer">
                             GitHub
                         </a>
                     </div>

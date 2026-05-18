@@ -196,10 +196,23 @@ export function LLMConfigEditor({
         setTesting(true)
         setTestResult(null)
         try {
+            const body = requestBody()
+            if (!body.model) {
+                setTestResult({ ok: false, detail: "No model configured.", model: "" })
+                return
+            }
+            if (provider.apiBaseRequired && !body.api_base) {
+                setTestResult({ ok: false, detail: "API base URL is required for this provider.", model: body.model })
+                return
+            }
+            if (provider.apiVersionRequired && !body.api_version) {
+                setTestResult({ ok: false, detail: "API version is required for this provider.", model: body.model })
+                return
+            }
             const resp = await fetch(`/api/proxy/tenants/${slug}/llm/test`, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify(requestBody()),
+                body: JSON.stringify(body),
             })
             if (!resp.ok) {
                 throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText)

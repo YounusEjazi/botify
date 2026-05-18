@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -16,7 +17,11 @@ class NotionConnector:
     kind = "notion"
 
     async def fetch_pages(
-        self, *, config: dict[str, Any], secret: dict[str, Any]
+        self,
+        *,
+        config: dict[str, Any],
+        secret: dict[str, Any],
+        since: datetime | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch pages from Notion databases and/or standalone page IDs.
 
@@ -24,6 +29,9 @@ class NotionConnector:
             {"database_ids": ["abc123", ...], "page_ids": ["def456", ...]}
         secret shape:
             {"api_key": "secret_..."}
+
+        When `since` is provided only pages modified on or after that timestamp
+        are returned (incremental sync).
         """
         api_key = secret.get("api_key", "")
         if not api_key:
@@ -40,12 +48,12 @@ class NotionConnector:
         async with httpx.AsyncClient(timeout=30.0) as client:
             # Fetch pages from each database
             for db_id in config.get("database_ids", []):
-                db_pages = await self._query_database(client, headers, db_id)
+                db_pages = await self._query_database(client, headers, db_id, since=since)
                 pages.extend(db_pages)
 
             # Fetch standalone page IDs
             for page_id in config.get("page_ids", []):
-                page = await self._fetch_page(client, headers, page_id)
+                page = await self._fetch_page(client, headers, page_id, since=since)
                 if page:
                     pages.append(page)
 
@@ -56,6 +64,8 @@ class NotionConnector:
         client: httpx.AsyncClient,
         headers: dict[str, str],
         database_id: str,
+        *,
+        since: datetime | None = None,
     ) -> list[dict[str, Any]]:
         """Query a Notion database and fetch content for each result page."""
         pages = []
@@ -63,6 +73,11 @@ class NotionConnector:
 
         while True:
             body: dict[str, Any] = {"page_size": 100}
+            if since:
+                body["filter"] = {
+                    "timestamp": "last_edited_time",
+                    "last_edited_time": {"on_or_after": since.isoformat()},
+                }
             if start_cursor:
                 body["start_cursor"] = start_cursor
 
@@ -75,7 +90,7 @@ class NotionConnector:
             data = resp.json()
 
             for notion_page in data.get("results", []):
-                page = await self._page_to_doc(client, headers, notion_page)
+                page = await self._page_to_doc(client, headers, notion_page, since=since)
                 if page:
                     pages.append(page)
 
@@ -90,6 +105,8 @@ class NotionConnector:
         client: httpx.AsyncClient,
         headers: dict[str, str],
         page_id: str,
+        *,
+        since: datetime | None = None,
     ) -> dict[str, Any] | None:
         """Fetch a single Notion page and its content blocks."""
         try:
@@ -99,7 +116,7 @@ class NotionConnector:
             )
             resp.raise_for_status()
             notion_page = resp.json()
-            return await self._page_to_doc(client, headers, notion_page)
+            return await self._page_to_doc(client, headers, notion_page, since=since)
         except httpx.HTTPStatusError as exc:
             logger.warning("Failed to fetch Notion page %s: %s", page_id, exc)
             return None
@@ -109,11 +126,22 @@ class NotionConnector:
         client: httpx.AsyncClient,
         headers: dict[str, str],
         notion_page: dict[str, Any],
+        *,
+        since: datetime | None = None,
     ) -> dict[str, Any] | None:
         """Convert a Notion page object + blocks into a {title, content, source_url} doc."""
         page_id = notion_page.get("id", "")
         if not page_id:
             return None
+
+        # For standalone page IDs, skip pages that haven't been modified since `since`.
+        # (Database queries already filter server-side; this guard covers the page_ids path.)
+        if since:
+            last_edited = notion_page.get("last_edited_time")
+            if last_edited:
+                last_edited_dt = datetime.fromisoformat(last_edited.replace("Z", "+00:00"))
+                if last_edited_dt < since:
+                    return None
 
         # Extract title from properties
         title = _extract_title(notion_page)
@@ -128,6 +156,7 @@ class NotionConnector:
             "title": title or "Untitled",
             "content": content,
             "source_url": source_url,
+            "doc_updated_at": notion_page.get("last_edited_time"),
         }
 
     async def _fetch_blocks_text(

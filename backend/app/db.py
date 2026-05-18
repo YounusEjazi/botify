@@ -89,15 +89,20 @@ def _ensure_columns() -> None:
         if "owner_id" not in cols:
             conn.execute(text("ALTER TABLE tenants ADD COLUMN owner_id VARCHAR(36)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tenants_owner_id ON tenants(owner_id)"))
-        if is_pg:
-            try:
+
+    # pgvector setup runs in its OWN transaction — failures here must not
+    # roll back the column additions above. Postgres aborts the whole
+    # transaction on any error, even if Python catches it.
+    if is_pg:
+        try:
+            with engine.begin() as conn:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
                 chunk_cols = {c["name"] for c in inspector.get_columns("chunks")}
                 if "embedding_vec" not in chunk_cols:
                     conn.execute(text("ALTER TABLE chunks ADD COLUMN embedding_vec vector"))
-            except Exception as exc:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "pgvector extension not available — falling back to numpy store. "
-                    "Install pgvector on the Postgres server to enable HNSW search. Error: %s", exc
-                )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "pgvector extension not available — falling back to numpy store. "
+                "Install pgvector on the Postgres server to enable HNSW search. Error: %s", exc
+            )

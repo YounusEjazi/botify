@@ -55,12 +55,36 @@ def get_vector_store() -> VectorStore:
         from ..config import get_settings
         settings = get_settings()
         if settings.database_url.startswith("postgresql"):
-            from .pgvector_store import PostgresVectorStore
-            _STORE = PostgresVectorStore()
+            _STORE = _try_pgvector_store()
         else:
             from .local_store import LocalVectorStore
             _STORE = LocalVectorStore()
     return _STORE
+
+
+def _try_pgvector_store() -> VectorStore:
+    """Return PostgresVectorStore if pgvector is installed, else LocalVectorStore."""
+    import logging
+    from sqlalchemy import text
+    from .pgvector_store import PostgresVectorStore
+    from .local_store import LocalVectorStore
+
+    try:
+        from ..db import engine
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+            )
+            if result.fetchone():
+                return PostgresVectorStore()
+    except Exception:
+        pass
+
+    logging.getLogger(__name__).warning(
+        "pgvector extension not found — using numpy local store. "
+        "Install pgvector on your Postgres server to enable HNSW search."
+    )
+    return LocalVectorStore()
 
 
 def set_vector_store(store: VectorStore) -> None:

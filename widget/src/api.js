@@ -49,5 +49,16 @@ export function createClient({ tenant, apiBase }) {
                 }),
             })
         },
+
+        async rate({ sessionId, rating }) {
+            const resp = await fetch(`${base}/rate`, {
+                method: "POST",
+                headers: { "content-type": "application/json", "x-tenant-slug": tenant },
+                body: JSON.stringify({ session_id: sessionId, rating }),
+                credentials: "omit",
+            })
+            // 204 No Content — don't try to parse JSON.
+            if (!resp.ok) throw new Error(`Rate failed: ${resp.status}`)
+        },
     }
 }

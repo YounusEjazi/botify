@@ -29,6 +29,9 @@ const ticketPrefill = ref({ subject: "", description: "", name: "", email: "" })
 const ticketSubmitting = ref(false)
 const ticketResult = ref(null)
 
+// Rating state — null = unrated, 1 = thumbs up, -1 = thumbs down
+const rating = ref(null)
+
 // ─── Bootstrap ────────────────────────────────────────────────────────
 const client = computed(() =>
     createClient({ tenant: props.tenant, apiBase: props.apiBase })
@@ -180,6 +183,16 @@ function resetTicket() {
     ticketPrefill.value = { subject: "", description: "", name: "", email: "" }
 }
 
+async function submitRating(value) {
+    if (rating.value !== null) return
+    rating.value = value
+    try {
+        await client.value.rate({ sessionId: sessionId.value, rating: value })
+    } catch {
+        // Rating is best-effort — don't surface errors to the user.
+    }
+}
+
 watch(messages, () => nextTick(() => scrollToBottom()), { deep: true })
 </script>
 
@@ -249,6 +262,26 @@ watch(messages, () => nextTick(() => scrollToBottom()), { deep: true })
                     <div class="cw-msg-bubble cw-typing">
                         <span></span><span></span><span></span>
                     </div>
+                </div>
+
+                <!-- Rating buttons — shown after at least one bot reply, above the last message -->
+                <div v-if="messages.some(m => m.role === 'assistant') && !sending" class="cw-rating">
+                    <span class="cw-rating-label">Was this helpful?</span>
+                    <button
+                        class="cw-rating-btn"
+                        :class="{ active: rating === 1, disabled: rating !== null }"
+                        @click="submitRating(1)"
+                        :disabled="rating !== null"
+                        aria-label="Thumbs up"
+                    >👍</button>
+                    <button
+                        class="cw-rating-btn"
+                        :class="{ active: rating === -1, disabled: rating !== null }"
+                        @click="submitRating(-1)"
+                        :disabled="rating !== null"
+                        aria-label="Thumbs down"
+                    >👎</button>
+                    <span v-if="rating !== null" class="cw-rating-thanks">Thanks!</span>
                 </div>
             </main>
 
@@ -528,4 +561,23 @@ export default { methods: { renderMarkdown } }
 .cw-case code {
     background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 3px;
 }
+
+.cw-rating {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 2px 0;
+    border-top: 1px solid #efefef;
+    margin-top: 4px;
+}
+.cw-rating-label { font-size: 12px; color: #888; }
+.cw-rating-btn {
+    background: none; border: 1px solid #e5e5e5; border-radius: 6px;
+    padding: 3px 8px; font-size: 14px; cursor: pointer; line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+}
+.cw-rating-btn:hover:not(:disabled) { background: #f5f5f5; border-color: #ccc; }
+.cw-rating-btn.active { background: #f0fdf4; border-color: #22c55e; }
+.cw-rating-btn.disabled { opacity: 0.5; cursor: default; }
+.cw-rating-thanks { font-size: 12px; color: #22c55e; }
 </style>

@@ -223,3 +223,36 @@ class DocumentOut(BaseModel):
 class DocumentFromUrl(BaseModel):
     url: str
     title: str | None = None
+
+
+# ─── Analytics ────────────────────────────────────────────────────────
+
+
+class DailyCount(BaseModel):
+    date: str   # ISO date YYYY-MM-DD
+    count: int
+
+
+class TopQuestion(BaseModel):
+    question: str
+    count: int
+
+
+class AnalyticsOut(BaseModel):
+    total_conversations: int
+    total_messages: int
+    avg_messages_per_conversation: float
+    conversations_last_7d: int
+    conversations_last_30d: int
+    rating_positive: int
+    rating_negative: int
+    rating_neutral: int
+    unrated: int
+    daily_conversations: list[DailyCount]
+    top_questions: list[TopQuestion]
+    language_breakdown: dict[str, int]
+
+
+class RateRequest(BaseModel):
+    session_id: str
+    rating: int = Field(ge=-1, le=1)

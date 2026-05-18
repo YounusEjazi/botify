@@ -12,6 +12,7 @@ const SECTIONS = [
     { href: "/knowledge",      label: "Knowledge base" },
     { href: "/integrations",   label: "Integrations" },
     { href: "/conversations",  label: "Conversations" },
+    { href: "/analytics",      label: "Analytics" },
     { href: "/danger",         label: "Danger zone" },
 ]
 

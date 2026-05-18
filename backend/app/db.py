@@ -86,3 +86,8 @@ def _ensure_columns() -> None:
             ))
         if "rerank_api_key_encrypted" not in cols:
             conn.execute(text(f"ALTER TABLE tenants ADD COLUMN rerank_api_key_encrypted {bin_type}"))
+        if is_pg:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            chunk_cols = {c["name"] for c in inspector.get_columns("chunks")}
+            if "embedding_vec" not in chunk_cols:
+                conn.execute(text("ALTER TABLE chunks ADD COLUMN embedding_vec vector"))

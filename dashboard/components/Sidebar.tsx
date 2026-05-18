@@ -10,6 +10,7 @@ const SECTIONS = [
     { href: "/prompt",         label: "System prompt" },
     { href: "/branding",       label: "Branding" },
     { href: "/knowledge",      label: "Knowledge base" },
+    { href: "/connectors",     label: "Connectors" },
     { href: "/retrieval",      label: "Retrieval" },
     { href: "/integrations",   label: "Integrations" },
     { href: "/conversations",  label: "Conversations" },

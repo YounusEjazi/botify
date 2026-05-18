@@ -121,6 +121,9 @@ class Tenant(Base):
     conversations: Mapped[list[Conversation]] = relationship(
         back_populates="tenant", cascade="all, delete-orphan"
     )
+    connector_sources: Mapped[list[ConnectorSource]] = relationship(
+        back_populates="tenant", cascade="all, delete-orphan"
+    )
 
 
 # ─── Integrations (pluggable actions) ──────────────────────────────────────
@@ -248,3 +251,29 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+# ─── Knowledge Connectors ──────────────────────────────────────────────────
+
+
+class ConnectorSource(Base):
+    """Auto-sync connector (Notion, Google Drive, etc.)"""
+
+    __tablename__ = "connector_sources"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)  # "notion" | "gdrive"
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="idle", nullable=False)
+    # "idle" | "syncing" | "ready" | "error"
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    config: Mapped[dict[str, Any]] = mapped_column(_JSON, default=dict, nullable=False)
+    encrypted_secret: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    tenant: Mapped[Tenant] = relationship(back_populates="connector_sources")

@@ -52,9 +52,14 @@ _STORE: VectorStore | None = None
 def get_vector_store() -> VectorStore:
     global _STORE
     if _STORE is None:
-        from .local_store import LocalVectorStore
-
-        _STORE = LocalVectorStore()
+        from ..config import get_settings
+        settings = get_settings()
+        if settings.database_url.startswith("postgresql"):
+            from .pgvector_store import PostgresVectorStore
+            _STORE = PostgresVectorStore()
+        else:
+            from .local_store import LocalVectorStore
+            _STORE = LocalVectorStore()
     return _STORE
 
 

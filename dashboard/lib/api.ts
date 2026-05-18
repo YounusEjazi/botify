@@ -83,6 +83,16 @@ export type Integration = {
     has_secret: boolean
 }
 
+export type RetrievalConfig = {
+    mode: "hybrid" | "vector"
+    candidate_k: number
+    rerank_enabled: boolean
+    rerank_provider: string
+    rerank_model: string
+    rerank_top_k: number
+    has_rerank_api_key: boolean
+}
+
 export type Document = {
     id: string
     title: string
@@ -109,6 +119,9 @@ export const api = {
 
     getEmbeddingConfig: (slug: string) =>
         call<EmbeddingConfig>(`/admin/tenants/${slug}/embedding`),
+
+    getRetrievalConfig: (slug: string) =>
+        call<RetrievalConfig>(`/admin/tenants/${slug}/retrieval`),
 
     listIntegrations: (slug: string) =>
         call<Integration[]>(`/admin/tenants/${slug}/integrations`),

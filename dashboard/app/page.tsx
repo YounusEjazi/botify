@@ -335,9 +335,9 @@ export default async function HomePage() {
                         <Link href="/docs" className="home-nav-link">Docs</Link>
                         {session ? (
                             <>
-                                <span style={{ fontSize: 13, color: "var(--ink-mute)", padding: "6px 8px" }}>
+                                <Link href="/account" className="home-nav-link" style={{ fontSize: 13, color: "var(--ink-mute)" }}>
                                     {session.email}
-                                </span>
+                                </Link>
                                 <Link href="/tenants" className="btn primary small" style={{ textDecoration: "none", marginLeft: 8 }}>
                                     Dashboard →
                                 </Link>

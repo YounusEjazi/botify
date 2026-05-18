@@ -60,9 +60,11 @@ export function TenantSidebar({ slug, name }: { slug: string; name: string }) {
             </nav>
 
             <div className="rail-section">Back</div>
+            <Link href="/" className="rail-link">Home</Link>
             <Link href="/tenants" className="rail-link">All tenants</Link>
 
             <div className="rail-section">Account</div>
+            <Link href="/account" className="rail-link">Profile & settings</Link>
             <LogoutButton />
         </aside>
     )

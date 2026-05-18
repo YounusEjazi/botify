@@ -18,14 +18,20 @@ export default async function TenantsIndex({
     return (
         <div className="container" style={{ padding: "56px 32px 80px", maxWidth: 960 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink)" }}>
+                <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink)", textDecoration: "none" }}>
                     <Logo size={28} />
                     <span style={{ fontFamily: "var(--f-display)", fontSize: 22, letterSpacing: "-0.01em" }}>
                         Bot<em>-ify</em>
                     </span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13 }}>
-                    {session && <span style={{ color: "var(--ink-mute)" }}>{session.email}</span>}
+                </Link>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <Link href="/" className="btn small">Home</Link>
+                    <Link href="/docs" className="btn small">Docs</Link>
+                    {session && (
+                        <Link href="/account" className="btn small" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ color: "var(--ink-mute)" }}>{session.email}</span>
+                        </Link>
+                    )}
                     <form action={logoutAction}>
                         <button type="submit" className="btn small">Sign out</button>
                     </form>

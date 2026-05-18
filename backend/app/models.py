@@ -44,6 +44,18 @@ class _JSON(TypeDecorator):
         return dialect.type_descriptor(JSON())
 
 
+# ─── User ──────────────────────────────────────────────────────────────────
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(256), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 # ─── Tenant ────────────────────────────────────────────────────────────────
 
 

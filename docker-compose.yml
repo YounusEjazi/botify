@@ -43,6 +43,7 @@ services:
     environment:
       - BACKEND_URL=http://backend:8000
       - ADMIN_API_KEY=${ADMIN_API_KEY:-change-me}
+      - AUTH_SECRET=${AUTH_SECRET:-change-me-to-a-random-32-char-secret}
     depends_on: [backend]
     volumes: ["./dashboard:/app", "/app/node_modules", "/app/.next"]
 

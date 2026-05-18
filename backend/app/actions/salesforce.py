@@ -144,7 +144,22 @@ async def submit_salesforce_case(
                 "client_secret": secret["client_secret"],
             },
         )
-        token_resp.raise_for_status()
+        if token_resp.status_code != 200:
+            try:
+                err_body = token_resp.json()
+            except Exception:
+                err_body = {"error": token_resp.text[:500]}
+            logger.error(
+                "Salesforce OAuth token request failed for tenant=%s: HTTP %s url=%s body=%s",
+                tenant.slug,
+                token_resp.status_code,
+                token_url,
+                err_body,
+            )
+            raise RuntimeError(
+                f"Salesforce auth failed (HTTP {token_resp.status_code}): "
+                f"{err_body.get('error_description') or err_body.get('error') or err_body}"
+            )
         access_token = token_resp.json()["access_token"]
 
         case_body: dict[str, Any] = {
@@ -198,7 +213,20 @@ async def submit_salesforce_case(
             json={"allOrNone": False, "compositeRequest": composite_requests},
             headers={"Authorization": f"Bearer {access_token}"},
         )
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            try:
+                err_body = resp.json()
+            except Exception:
+                err_body = {"error": resp.text[:500]}
+            logger.error(
+                "Salesforce composite request failed for tenant=%s: HTTP %s body=%s",
+                tenant.slug,
+                resp.status_code,
+                err_body,
+            )
+            raise RuntimeError(
+                f"Salesforce case creation failed (HTTP {resp.status_code}): {err_body}"
+            )
         data = resp.json()
 
     comp = data.get("compositeResponse", [])

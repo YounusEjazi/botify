@@ -6,7 +6,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -58,18 +58,29 @@ router = APIRouter(
 
 
 @router.get("/tenants", response_model=list[TenantOut])
-def list_tenants(db: Annotated[Session, Depends(get_db)]) -> list[Tenant]:
-    return list(db.scalars(select(Tenant).order_by(Tenant.created_at.desc())).all())
+def list_tenants(
+    db: Annotated[Session, Depends(get_db)],
+    x_user_id: Annotated[str | None, Header()] = None,
+) -> list[Tenant]:
+    query = select(Tenant).order_by(Tenant.created_at.desc())
+    if x_user_id:
+        query = query.where(Tenant.owner_id == x_user_id)
+    return list(db.scalars(query).all())
 
 
 @router.post("/tenants", response_model=TenantOut, status_code=status.HTTP_201_CREATED)
-def create_tenant(payload: TenantCreate, db: Annotated[Session, Depends(get_db)]) -> Tenant:
+def create_tenant(
+    payload: TenantCreate,
+    db: Annotated[Session, Depends(get_db)],
+    x_user_id: Annotated[str | None, Header()] = None,
+) -> Tenant:
     if db.scalar(select(Tenant).where(Tenant.slug == payload.slug)):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Slug already taken")
 
     tenant = Tenant(
         slug=payload.slug,
         name=payload.name,
+        owner_id=x_user_id,
         allowed_origins=payload.allowed_origins,
         branding=payload.branding,
         languages=payload.languages,
@@ -88,11 +99,12 @@ def create_tenant(payload: TenantCreate, db: Annotated[Session, Depends(get_db)]
 
 
 @router.get("/tenants/{slug}", response_model=TenantOut)
-def get_tenant(slug: str, db: Annotated[Session, Depends(get_db)]) -> Tenant:
-    tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
-    if not tenant:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
-    return tenant
+def get_tenant(
+    slug: str,
+    db: Annotated[Session, Depends(get_db)],
+    x_user_id: Annotated[str | None, Header()] = None,
+) -> Tenant:
+    return _get_tenant_or_404(slug, db, x_user_id)
 
 
 @router.patch("/tenants/{slug}", response_model=TenantOut)
@@ -100,11 +112,9 @@ def update_tenant(
     slug: str,
     payload: TenantUpdate,
     db: Annotated[Session, Depends(get_db)],
+    x_user_id: Annotated[str | None, Header()] = None,
 ) -> Tenant:
-    tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
-    if not tenant:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
-
+    tenant = _get_tenant_or_404(slug, db, x_user_id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(tenant, field, value)
     db.commit()
@@ -113,10 +123,12 @@ def update_tenant(
 
 
 @router.delete("/tenants/{slug}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_tenant(slug: str, db: Annotated[Session, Depends(get_db)]) -> None:
-    tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
-    if not tenant:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+def delete_tenant(
+    slug: str,
+    db: Annotated[Session, Depends(get_db)],
+    x_user_id: Annotated[str | None, Header()] = None,
+) -> None:
+    tenant = _get_tenant_or_404(slug, db, x_user_id)
     db.delete(tenant)
     db.commit()
 
@@ -678,9 +690,12 @@ def get_conversation(conversation_id: str, db: Annotated[Session, Depends(get_db
 # ─── Helpers ───────────────────────────────────────────────────────────────
 
 
-def _get_tenant_or_404(slug: str, db: Session) -> Tenant:
+def _get_tenant_or_404(slug: str, db: Session, owner_id: str | None = None) -> Tenant:
     tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
     if not tenant:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    # If an owner is specified, enforce ownership (404 not 403 to avoid info leak).
+    if owner_id and tenant.owner_id and tenant.owner_id != owner_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     return tenant
 

@@ -86,6 +86,9 @@ def _ensure_columns() -> None:
             ))
         if "rerank_api_key_encrypted" not in cols:
             conn.execute(text(f"ALTER TABLE tenants ADD COLUMN rerank_api_key_encrypted {bin_type}"))
+        if "owner_id" not in cols:
+            conn.execute(text("ALTER TABLE tenants ADD COLUMN owner_id VARCHAR(36)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_tenants_owner_id ON tenants(owner_id)"))
         if is_pg:
             try:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))

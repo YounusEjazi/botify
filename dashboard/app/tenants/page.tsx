@@ -2,21 +2,34 @@ import { api } from "@/lib/api"
 import Link from "next/link"
 import { Notice } from "@/components/ui"
 import { Logo } from "@/components/Logo"
+import { logoutAction } from "@/app/login/actions"
+import { cookies } from "next/headers"
+import { verifySession, SESSION_COOKIE } from "@/lib/session"
 
 export default async function TenantsIndex({
     searchParams,
 }: {
     searchParams: Promise<{ deleted?: string }>
 }) {
+    const cookieStore = await cookies()
+    const session = await verifySession(cookieStore.get(SESSION_COOKIE)?.value)
     const [tenants, sp] = await Promise.all([api.listTenants(), searchParams])
 
     return (
         <div className="container" style={{ padding: "56px 32px 80px", maxWidth: 960 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, color: "var(--ink)" }}>
-                <Logo size={28} />
-                <span style={{ fontFamily: "var(--f-display)", fontSize: 22, letterSpacing: "-0.01em" }}>
-                    Bot<em>-ify</em>
-                </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--ink)" }}>
+                    <Logo size={28} />
+                    <span style={{ fontFamily: "var(--f-display)", fontSize: 22, letterSpacing: "-0.01em" }}>
+                        Bot<em>-ify</em>
+                    </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13 }}>
+                    {session && <span style={{ color: "var(--ink-mute)" }}>{session.email}</span>}
+                    <form action={logoutAction}>
+                        <button type="submit" className="btn small">Sign out</button>
+                    </form>
+                </div>
             </div>
             <div className="eyebrow">Dashboard</div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>

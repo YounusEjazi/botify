@@ -66,6 +66,11 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
 
+    # Owning user — nullable for legacy tenants created before auth existed.
+    owner_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # CORS allowlist — replaces the old single FRONTEND_URL env var
     allowed_origins: Mapped[list[str]] = mapped_column(_JSON, default=list, nullable=False)
 

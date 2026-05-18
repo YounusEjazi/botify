@@ -1,9 +1,21 @@
 "use server"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import { createSessionCookie } from "@/lib/session"
+import { signSession, SESSION_COOKIE, SESSION_MAX_AGE } from "@/lib/session"
 
 const BACKEND = process.env.BACKEND_URL ?? "http://backend:8000"
+
+async function setSession(userId: string, email: string) {
+    const cookieStore = await cookies()
+    cookieStore.set({
+        name: SESSION_COOKIE,
+        value: await signSession(userId, email),
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: SESSION_MAX_AGE,
+    })
+}
 
 export async function loginAction(
     _prev: string | null,
@@ -17,20 +29,10 @@ export async function loginAction(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
     })
-
     if (!res.ok) return "Invalid email or password."
 
     const user = await res.json()
-    const cookieStore = await cookies()
-    cookieStore.set({
-        name: "botify_session",
-        value: await buildSessionValue(user.id, email),
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7,
-    })
-
+    await setSession(user.id, email)
     redirect("/tenants")
 }
 
@@ -46,47 +48,18 @@ export async function registerAction(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
     })
-
     if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         return data.detail ?? "Registration failed."
     }
 
     const user = await res.json()
-    const cookieStore = await cookies()
-    cookieStore.set({
-        name: "botify_session",
-        value: await buildSessionValue(user.id, email),
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7,
-    })
-
+    await setSession(user.id, email)
     redirect("/tenants")
 }
 
 export async function logoutAction() {
     const cookieStore = await cookies()
-    cookieStore.delete("botify_session")
+    cookieStore.delete(SESSION_COOKIE)
     redirect("/login")
-}
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-async function buildSessionValue(userId: string, email: string): Promise<string> {
-    const SECRET = process.env.AUTH_SECRET ?? "change-me-to-a-random-32-char-secret"
-    const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7
-    const payload = Buffer.from(`${userId}|${email}|${exp}`).toString("base64url")
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(SECRET),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    )
-    const sig = Buffer.from(
-        await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))
-    ).toString("base64url")
-    return `${payload}.${sig}`
 }

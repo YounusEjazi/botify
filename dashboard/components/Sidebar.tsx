@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Logo } from "./Logo"
+import { LogoutButton } from "./LogoutButton"
 
 const SECTIONS = [
     { href: "",                label: "Overview" },
@@ -59,7 +60,10 @@ export function TenantSidebar({ slug, name }: { slug: string; name: string }) {
             </nav>
 
             <div className="rail-section">Back</div>
-            <Link href="/" className="rail-link">All tenants</Link>
+            <Link href="/tenants" className="rail-link">All tenants</Link>
+
+            <div className="rail-section">Account</div>
+            <LogoutButton />
         </aside>
     )
 }

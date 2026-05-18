@@ -58,7 +58,7 @@ export function ConversationViewer({ convos }: { convos: Convo[] }) {
                                     {c.first_user_message || <em style={{ color: "var(--ink-mute)" }}>(none)</em>}
                                 </td>
                                 <td style={{ fontFamily: "var(--f-mono)" }}>{c.language || "—"}</td>
-                                <td style={{ paddingRight: 16, color: "var(--ink-mute)" }}>
+                                <td style={{ paddingRight: 16, color: "var(--ink-mute)" }} suppressHydrationWarning>
                                     {new Date(c.created_at).toLocaleString()}
                                 </td>
                             </tr>
@@ -73,7 +73,7 @@ export function ConversationViewer({ convos }: { convos: Convo[] }) {
                 {selected && !loading && messages.map((m, i) => (
                     <div key={i} style={{ marginBottom: 14 }}>
                         <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: m.role === "user" ? "var(--accent)" : "var(--ink-mute)" }}>
-                            {m.role} · {new Date(m.created_at).toLocaleTimeString()}
+                            <span suppressHydrationWarning>{m.role} · {new Date(m.created_at).toLocaleTimeString()}</span>
                         </div>
                         <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{m.content}</div>
                         {m.tool_data?.actions && m.tool_data.actions.length > 0 && (

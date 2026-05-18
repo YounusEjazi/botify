@@ -134,7 +134,7 @@ export function KnowledgeManager({ slug, initialDocs }: { slug: string; initialD
                                         </td>
                                         <td><span className={`badge ${d.status}`}>{d.status}</span></td>
                                         <td style={{ fontFamily: "var(--f-mono)" }}>{d.chunk_count}</td>
-                                        <td style={{ color: "var(--ink-mute)" }}>{new Date(d.created_at).toLocaleDateString()}</td>
+                                        <td style={{ color: "var(--ink-mute)" }} suppressHydrationWarning>{new Date(d.created_at).toLocaleDateString()}</td>
                                         <td><button className="btn small danger" onClick={() => deleteDoc(d.id, d.title)}>Delete</button></td>
                                     </tr>
                                 ))}

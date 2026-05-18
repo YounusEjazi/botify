@@ -128,7 +128,7 @@ export function ConnectorsPage({ slug, initial }: { slug: string; initial: Conne
                                         </td>
                                         <td style={{ fontFamily: "var(--f-mono)" }}>{KIND_META[c.kind]?.label ?? c.kind}</td>
                                         <td><span className={`badge ${STATUS_BADGE[c.status] ?? ""}`}>{c.status}</span></td>
-                                        <td style={{ fontSize: 12, color: "var(--ink-mute)" }}>{formatDate(c.last_synced_at)}</td>
+                                        <td style={{ fontSize: 12, color: "var(--ink-mute)" }} suppressHydrationWarning>{formatDate(c.last_synced_at)}</td>
                                         <td>{c.has_secret
                                             ? <span className="badge ready">stored</span>
                                             : <span className="badge failed">missing</span>}

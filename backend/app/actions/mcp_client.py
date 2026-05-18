@@ -142,17 +142,10 @@ async def call_mcp_tool(
     headers = _make_headers(public_config, secret)
 
     try:
-        # Handshake
-        await _jsonrpc(
-            server_url,
-            "initialize",
-            {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "botify", "version": "1.0"},
-            },
-            headers,
-        )
+        # Skip the initialize handshake here: stateless HTTP MCP servers accept
+        # tools/call directly when the caller already knows the tool name.
+        # fetch_mcp_tools() performs initialize + tools/list at discovery time;
+        # repeating initialize on every call would double the round-trip latency.
         result = await _jsonrpc(
             server_url,
             "tools/call",

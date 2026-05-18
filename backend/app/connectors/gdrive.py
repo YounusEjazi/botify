@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 import time
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -29,7 +30,11 @@ class GDriveConnector:
     kind = "gdrive"
 
     async def fetch_pages(
-        self, *, config: dict[str, Any], secret: dict[str, Any]
+        self,
+        *,
+        config: dict[str, Any],
+        secret: dict[str, Any],
+        since: datetime | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch files from Google Drive folders and/or explicit file IDs.
 
@@ -41,6 +46,9 @@ class GDriveConnector:
             }
         secret shape:
             {"service_account_json": "{...json string of service account key...}"}
+
+        When `since` is provided only files modified on or after that timestamp
+        are returned from folder listings (incremental sync).
         """
         sa_json_str = secret.get("service_account_json", "")
         if not sa_json_str:
@@ -61,7 +69,7 @@ class GDriveConnector:
         async with httpx.AsyncClient(timeout=60.0) as client:
             # Files from folders
             for folder_id in config.get("folder_ids", []):
-                folder_files = await _list_folder_files(client, headers, folder_id)
+                folder_files = await _list_folder_files(client, headers, folder_id, since=since)
                 for f in folder_files:
                     if f["id"] in seen_ids:
                         continue
@@ -146,15 +154,20 @@ async def _list_folder_files(
     client: httpx.AsyncClient,
     headers: dict[str, str],
     folder_id: str,
+    *,
+    since: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """List all non-trashed files directly in a Drive folder."""
     files: list[dict[str, Any]] = []
     page_token: str | None = None
 
     while True:
+        query = f"'{folder_id}' in parents and trashed = false"
+        if since:
+            query += f" and modifiedTime > '{since.isoformat()}'"
         params: dict[str, Any] = {
-            "q": f"'{folder_id}' in parents and trashed = false",
-            "fields": "nextPageToken, files(id, name, mimeType, webViewLink)",
+            "q": query,
+            "fields": "nextPageToken, files(id, name, mimeType, webViewLink, modifiedTime)",
             "pageSize": 100,
         }
         if page_token:
@@ -186,7 +199,7 @@ async def _get_file_meta(
         resp = await client.get(
             f"{GDRIVE_API_BASE}/files/{file_id}",
             headers=headers,
-            params={"fields": "id, name, mimeType, webViewLink"},
+            params={"fields": "id, name, mimeType, webViewLink, modifiedTime"},
         )
         resp.raise_for_status()
         return resp.json()
@@ -200,11 +213,12 @@ async def _file_to_doc(
     headers: dict[str, str],
     file_meta: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Download or export a Drive file and return a {title, content, source_url} dict."""
+    """Download or export a Drive file and return a {title, content, source_url, doc_updated_at} dict."""
     file_id = file_meta["id"]
     title = file_meta.get("name", "Untitled")
     mime_type = file_meta.get("mimeType", "")
     source_url = file_meta.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
+    doc_updated_at = file_meta.get("modifiedTime")
 
     # Google Workspace docs: export as text
     if mime_type in _EXPORTABLE_AS_TEXT:
@@ -220,7 +234,7 @@ async def _file_to_doc(
         except httpx.HTTPStatusError as exc:
             logger.warning("Failed to export Drive file %s: %s", file_id, exc)
             return None
-        return {"title": title, "content": content, "source_url": source_url}
+        return {"title": title, "content": content, "source_url": source_url, "doc_updated_at": doc_updated_at}
 
     # Plain text files: download directly
     if any(mime_type.startswith(prefix) for prefix in _TEXT_MIME_PREFIXES):
@@ -235,7 +249,7 @@ async def _file_to_doc(
         except httpx.HTTPStatusError as exc:
             logger.warning("Failed to download Drive file %s: %s", file_id, exc)
             return None
-        return {"title": title, "content": content, "source_url": source_url}
+        return {"title": title, "content": content, "source_url": source_url, "doc_updated_at": doc_updated_at}
 
     # PDFs and other binary formats: store metadata only (full parsing out of scope for v1)
     logger.info(
@@ -245,4 +259,5 @@ async def _file_to_doc(
         "title": title,
         "content": f"[Binary file: {mime_type}. Download from {source_url}]",
         "source_url": source_url,
+        "doc_updated_at": doc_updated_at,
     }

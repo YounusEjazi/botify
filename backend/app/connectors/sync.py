@@ -30,7 +30,11 @@ async def sync_connector(
     try:
         instance = cls()
         secret = decrypt_dict(connector.encrypted_secret)
-        pages = await instance.fetch_pages(config=connector.config, secret=secret)
+        pages = await instance.fetch_pages(
+            config=connector.config,
+            secret=secret,
+            since=connector.last_synced_at,
+        )
 
         for page in pages:
             source_url = page.get("source_url")
@@ -61,6 +65,11 @@ async def sync_connector(
                     status="pending",
                 )
                 db.add(doc)
+
+            # Propagate the source-side modification timestamp if the model has the field.
+            doc_updated_at = page.get("doc_updated_at")
+            if doc_updated_at and hasattr(doc, "doc_updated_at"):
+                doc.doc_updated_at = doc_updated_at
 
             db.flush()
 

@@ -1,68 +1,61 @@
-import { api } from "@/lib/api"
 import Link from "next/link"
-import { Notice } from "@/components/ui"
 import { Logo } from "@/components/Logo"
 
-export default async function TenantsIndex({
-    searchParams,
-}: {
-    searchParams: Promise<{ deleted?: string }>
-}) {
-    const [tenants, sp] = await Promise.all([api.listTenants(), searchParams])
-
+export default function Home() {
     return (
-        <div className="container" style={{ padding: "56px 32px 80px", maxWidth: 960 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, color: "var(--ink)" }}>
-                <Logo size={28} />
-                <span style={{ fontFamily: "var(--f-display)", fontSize: 22, letterSpacing: "-0.01em" }}>
-                    Bot<em>-ify</em>
-                </span>
-            </div>
-            <div className="eyebrow">Dashboard</div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
-                <h1 className="h-display">Tenants</h1>
-                <Link href="/tenants/new" className="btn primary">New tenant</Link>
-            </div>
-            <p className="subdued">Turn any business into a bot. Every deployment lives under a tenant — pick one to manage prompts, branding, knowledge, and integrations.</p>
-
-            {sp.deleted && (
-                <div style={{ marginTop: 16 }}>
-                    <Notice kind="success">
-                        Tenant <code>{sp.deleted}</code> deleted.
-                    </Notice>
-                </div>
-            )}
-
-            {tenants.length === 0 ? (
-                <div className="card" style={{ marginTop: 24 }}>
-                    <p className="subdued" style={{ margin: 0 }}>
-                        No tenants yet. <Link href="/tenants/new">Create your first one</Link>.
-                    </p>
-                </div>
-            ) : (
+        <div style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "var(--bg)",
+        }}>
+            <div style={{ textAlign: "center", maxWidth: 480, padding: "0 32px" }}>
                 <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                    gap: 16,
-                    marginTop: 24,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 12,
+                    marginBottom: 24,
+                    color: "var(--ink)",
                 }}>
-                    {tenants.map((t) => (
-                        <Link key={t.id} href={`/tenants/${t.slug}`} style={{ textDecoration: "none" }}>
-                            <div className="card" style={{ height: "100%" }}>
-                                <div className="card-header">
-                                    <h2 className="card-title">{t.name}</h2>
-                                </div>
-                                <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--ink-mute)" }}>
-                                    {t.slug}
-                                </div>
-                                <div className="subdued" style={{ marginTop: 12, fontSize: 13 }}>
-                                    Languages: {t.languages.join(", ") || "—"}
-                                </div>
-                            </div>
-                        </Link>
-                    ))}
+                    <Logo size={40} />
+                    <span style={{
+                        fontFamily: "var(--f-display)",
+                        fontSize: 36,
+                        letterSpacing: "-0.01em",
+                        lineHeight: 1,
+                    }}>
+                        Bot<em style={{ fontStyle: "italic", color: "var(--accent)" }}>-ify</em>
+                    </span>
                 </div>
-            )}
+
+                <p style={{
+                    fontFamily: "var(--f-body)",
+                    fontSize: 16,
+                    color: "var(--ink-mute)",
+                    lineHeight: 1.6,
+                    margin: "0 0 40px",
+                }}>
+                    Multi-tenant AI chatbot platform. Give any business its own widget, knowledge base, and LLM configuration.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+                    <Link
+                        href="/tenants"
+                        className="btn primary"
+                        style={{ fontSize: 15, padding: "12px 28px", textDecoration: "none", minWidth: 200, justifyContent: "center" }}
+                    >
+                        Go to Tenants →
+                    </Link>
+                    <Link
+                        href="/docs"
+                        className="btn"
+                        style={{ fontSize: 14, padding: "10px 28px", textDecoration: "none", minWidth: 200, justifyContent: "center" }}
+                    >
+                        Documentation →
+                    </Link>
+                </div>
+            </div>
         </div>
     )
 }
